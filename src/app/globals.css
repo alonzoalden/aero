@@ -1,0 +1,269 @@
+:root {
+  color-scheme: dark;
+  --bg: #07111f;
+  --panel: #0d1828;
+  --panel-2: #122238;
+  --border: #21324a;
+  --text: #e5eefb;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --selected: #facc15;
+  --danger: #fb7185;
+  --warn: #fbbf24;
+  --ok: #34d399;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button {
+  font: inherit;
+}
+
+.dashboard-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.map-region,
+.map-wrap,
+.map-canvas {
+  min-width: 0;
+  min-height: 0;
+}
+
+.map-wrap {
+  position: relative;
+  height: 100%;
+}
+
+.map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.map-title,
+.map-hover-card {
+  position: absolute;
+  z-index: 2;
+  border: 1px solid rgb(148 163 184 / 24%);
+  border-radius: 8px;
+  background: rgb(7 17 31 / 86%);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 32%);
+}
+
+.map-title {
+  top: 16px;
+  left: 58px;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+}
+
+.map-title span {
+  font-weight: 700;
+}
+
+.map-title small,
+.muted,
+.flight-row small {
+  color: var(--muted);
+}
+
+.map-hover-card {
+  left: 16px;
+  bottom: 16px;
+  display: grid;
+  gap: 4px;
+  width: 220px;
+  padding: 12px;
+  font-size: 13px;
+}
+
+.ops-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  padding: 18px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-header p,
+.panel-header h1,
+.panel-section h2 {
+  margin: 0;
+}
+
+.panel-header p {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.panel-header h1 {
+  font-size: 28px;
+}
+
+.status-pill {
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.status-open {
+  color: var(--ok);
+}
+
+.status-error,
+.status-closed {
+  color: var(--danger);
+}
+
+.panel-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgb(18 34 56 / 72%);
+  padding: 14px;
+}
+
+.panel-section h2 {
+  margin-bottom: 12px;
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 8px 12px;
+  font-size: 14px;
+}
+
+.detail-grid span {
+  color: var(--muted);
+}
+
+.flight-list,
+.alert-list {
+  display: grid;
+  gap: 8px;
+}
+
+.flight-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0a1422;
+  color: var(--text);
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.flight-row > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.flight-row.selected {
+  border-color: var(--selected);
+}
+
+.alert {
+  display: grid;
+  gap: 4px;
+  border-left: 3px solid var(--accent);
+  padding: 8px 10px;
+  background: #0a1422;
+  font-size: 13px;
+}
+
+.alert-warning {
+  border-left-color: var(--warn);
+}
+
+.alert-critical {
+  border-left-color: var(--danger);
+}
+
+.chart-heading {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.altitude-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.altitude-chart line {
+  stroke: rgb(148 163 184 / 24%);
+}
+
+.altitude-chart text {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
+.altitude-chart path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-width: 2.5;
+}
+
+.chart-empty {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+@media (max-width: 900px) {
+  .dashboard-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(420px, 58vh) 1fr;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .ops-panel {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
