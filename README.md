@@ -75,13 +75,44 @@ MapLibre owns camera movement through `easeTo`: center, zoom, pitch, bearing, an
 
 Follow and Chase need an explicit selected aircraft. If the user manually pans, zooms, or rotates while Follow or Chase is active, the app allows the gesture, then the next throttled selected-aircraft update recenters the camera. Camera updates are throttled so high-rate WebSocket streams do not call `easeTo` on every aircraft message.
 
-This is still MapLibre camera control, not a cockpit, first-person, or full 3D scene. There is no Three.js, no glTF aircraft model, and no deck.gl `FirstPersonView` in this slice. The offsets are approximate map-camera effects, and Orbit can conflict with Chase because Chase bearing is based on aircraft heading while Orbit bearing is time-based.
+This is still MapLibre camera control, not a cockpit, first-person, or full 3D scene. The 3D aircraft model mode is a deck.gl overlay, not a separate Three.js scene or deck.gl `FirstPersonView`. The offsets are approximate map-camera effects, and Orbit can conflict with Chase because Chase bearing is based on aircraft heading while Orbit bearing is time-based.
 
 Future camera tickets:
 
-1. Add a selected-aircraft glTF model with deck.gl `ScenegraphLayer`.
+1. Polish selected-aircraft model framing and scale.
 2. Build a standalone deck.gl `FirstPersonView` experiment.
 3. Use Three.js only if the product needs a full custom 3D scene.
+
+## 3D Aircraft Models
+
+Aircraft can render in three visual modes:
+
+- `Dots`: the original deck.gl `ScatterplotLayer` circle markers plus labels when density is low. This remains the best view for stress mode and very high aircraft counts.
+- `Models`: a deck.gl `ScenegraphLayer` renders a local glTF/GLB airplane model for every aircraft while the count is below the demo safety cap.
+- `Hybrid`: the selected aircraft renders as a 3D model and the rest remain dots. This is the default because it gives a clear selected-aircraft visual without paying the cost of thousands of model instances.
+
+The model asset is `public/models/airplane.glb`, a small generated low-poly demo model created for this repo. glTF/GLB is the model format because deck.gl `ScenegraphLayer` can load it directly. MapLibre still owns the basemap, map style, pan, zoom, pitch, bearing, and camera easing. deck.gl remains the geospatial overlay renderer, and its aircraft layers stay synced to the MapLibre camera through `MapboxOverlay`.
+
+This does not require Three.js yet because the app is not building a standalone 3D scene. The goal is still a map-first operational dashboard: MapLibre provides geographic context, deck.gl renders GPU overlays, and React owns the controls and selected-flight state. A future Three.js slice would only make sense if the product needed a full custom 3D world, cockpit view, hangar scene, or non-map camera system.
+
+The model layer uses aircraft `headingDeg` for orientation and keeps the correction in `AIRCRAFT_MODEL_YAW_OFFSET_DEG` because model forward axes vary by asset. The generated model points along local `+Y`, so the current offset is `0`. ADS-B altitude is feet, while deck.gl elevation is meters; the implementation converts feet to meters and applies a small readability scale with clamps so aircraft remain visible over the map instead of trying to be a precise flight simulator.
+
+Models are capped at 300 aircraft in this demo. If the user selects `Models` above that threshold, the map falls back to dots and the UI explains why. Dots remain useful because high-density geospatial views need legibility and predictable local performance more than per-aircraft 3D detail.
+
+Known limitations:
+
+- Model orientation may need tuning per asset.
+- This is not a true cockpit, first-person, or flight-simulator scene.
+- Altitude scaling is simplified for readability.
+- High model counts can be expensive, so the demo protects itself with a 300-aircraft cap.
+
+Future 3D tickets:
+
+1. Polish selected-aircraft-only model styling and hover affordances.
+2. Scale model size by zoom level and camera pitch.
+3. Add a surface/true-altitude/exaggerated-altitude toggle.
+4. Try a deck.gl `FirstPersonView` experiment as a separate slice.
+5. Add Three.js only if a full custom 3D scene becomes the actual goal.
 
 ## Real vs Simulated
 

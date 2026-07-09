@@ -3,28 +3,35 @@
 import { AltitudeChart } from '@/components/panels/AltitudeChart';
 import { formatNumber, formatRoute, formatTime } from '@/lib/format';
 import type { ConnectionStatus, FrontendStreamMetrics } from '@/hooks/useFlightStream';
-import type { FlightAlert, FlightServerStatus, FlightState } from '@/types/flight';
+import type { AircraftVisualMode, FlightAlert, FlightServerStatus, FlightState } from '@/types/flight';
 
 type OperationsPanelProps = {
   alerts: FlightAlert[];
+  aircraftVisualMode: AircraftVisualMode;
   connectionStatus: ConnectionStatus;
   flights: FlightState[];
   frontendMetrics: FrontendStreamMetrics;
   serverStatus: FlightServerStatus | null;
   selectedFlight: FlightState | null;
+  onAircraftVisualModeChange: (mode: AircraftVisualMode) => void;
   onSelectFlight: (flightId: string) => void;
 };
 
+const aircraftModelThreshold = 300;
+
 export function OperationsPanel({
   alerts,
+  aircraftVisualMode,
   connectionStatus,
   flights,
   frontendMetrics,
   serverStatus,
   selectedFlight,
+  onAircraftVisualModeChange,
   onSelectFlight
 }: OperationsPanelProps) {
   const isStressMode = serverStatus?.source === 'stress';
+  const modelFallbackIsActive = aircraftVisualMode === 'models' && flights.length > aircraftModelThreshold;
   const visibleFlights = isStressMode ? flights.slice(0, 80) : flights;
   const hiddenFlightCount = Math.max(0, flights.length - visibleFlights.length);
   const scaleMetrics = serverStatus?.scaleMetrics;
@@ -92,6 +99,35 @@ export function OperationsPanel({
           </div>
         </section>
       ) : null}
+
+      <section className="panel-section">
+        <div className="section-heading-row">
+          <h2>Aircraft Style</h2>
+          <strong>{aircraftVisualMode}</strong>
+        </div>
+        <div className="mode-segment" aria-label="Aircraft visual mode">
+          {(['dots', 'models', 'hybrid'] as const).map((mode) => (
+            <button
+              aria-pressed={aircraftVisualMode === mode}
+              className={aircraftVisualMode === mode ? 'mode-button active' : 'mode-button'}
+              key={mode}
+              onClick={() => onAircraftVisualModeChange(mode)}
+              type="button"
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+        <p className="muted mode-note">
+          {modelFallbackIsActive
+            ? `Models are capped at ${aircraftModelThreshold} aircraft for this demo, so the map is using dots.`
+            : aircraftVisualMode === 'hybrid'
+              ? 'Hybrid draws the selected aircraft as a model and keeps the rest as fast dots.'
+              : aircraftVisualMode === 'models'
+                ? 'Models use deck.gl ScenegraphLayer when the aircraft count is below the demo safety cap.'
+                : 'Dots keep high-density and stress-mode views readable.'}
+        </p>
+      </section>
 
       <section className="panel-section">
         <h2>Selected aircraft</h2>

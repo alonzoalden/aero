@@ -5,11 +5,13 @@ import { FlightMap } from '@/components/map/FlightMap';
 import { OperationsPanel } from '@/components/panels/OperationsPanel';
 import { useFlightStream } from '@/hooks/useFlightStream';
 import type { CameraMode, CameraSettings } from '@/types/camera';
+import type { AircraftVisualMode } from '@/types/flight';
 
 export function FlightOpsDashboard() {
   const { alerts, connectionStatus, flightsById, frontendMetrics, serverStatus } = useFlightStream();
   const flights = useMemo(() => Object.values(flightsById), [flightsById]);
   const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
+  const [aircraftVisualMode, setAircraftVisualMode] = useState<AircraftVisualMode>('hybrid');
   const [cameraMode, setCameraMode] = useState<CameraMode>('free');
   const [cameraSettings, setCameraSettings] = useState<CameraSettings>({
     orbitEnabled: false,
@@ -24,6 +26,7 @@ export function FlightOpsDashboard() {
         <FlightMap
           cameraMode={cameraMode}
           cameraSettings={cameraSettings}
+          aircraftVisualMode={aircraftVisualMode}
           flights={flights}
           selectedFlight={selectedFlight}
           selectedFlightId={selectedFlight?.flightId ?? null}
@@ -39,6 +42,8 @@ export function FlightOpsDashboard() {
         frontendMetrics={frontendMetrics}
         serverStatus={serverStatus}
         selectedFlight={selectedFlight}
+        aircraftVisualMode={aircraftVisualMode}
+        onAircraftVisualModeChange={setAircraftVisualMode}
         onSelectFlight={setSelectedFlightId}
       />
     </main>

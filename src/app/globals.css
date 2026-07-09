@@ -59,6 +59,7 @@ button {
 
 .map-title,
 .map-hover-card,
+.visual-mode-badge,
 .camera-control {
   position: absolute;
   z-index: 2;
@@ -81,9 +82,26 @@ button {
 }
 
 .map-title small,
+.visual-mode-badge span,
+.visual-mode-badge small,
 .muted,
 .flight-row small {
   color: var(--muted);
+}
+
+.visual-mode-badge {
+  left: 58px;
+  top: 78px;
+  display: grid;
+  gap: 2px;
+  min-width: 158px;
+  padding: 9px 10px;
+  font-size: 12px;
+}
+
+.visual-mode-badge strong {
+  color: var(--accent);
+  text-transform: capitalize;
 }
 
 .map-hover-card {
@@ -245,6 +263,51 @@ button {
   margin-bottom: 12px;
   font-size: 14px;
   text-transform: uppercase;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.section-heading-row h2 {
+  margin-bottom: 0;
+}
+
+.section-heading-row strong {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.mode-segment {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.mode-button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #0a1422;
+  color: var(--text);
+  padding: 8px;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.mode-button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.mode-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .detail-grid {
