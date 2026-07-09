@@ -66,18 +66,22 @@ The map has three camera modes:
 - `Follow`: centers the selected aircraft with moderate zoom and pitch.
 - `Chase`: centers near the selected aircraft, uses a higher pitch, and eases the MapLibre bearing toward aircraft heading when heading is available.
 
-MapLibre owns camera movement through `easeTo`: center, zoom, pitch, and bearing. deck.gl overlays stay synced because they are rendered on top of the MapLibre camera. React only stores the selected aircraft and camera mode; it does not render aircraft markers as DOM nodes.
+The Cinematic Camera controls add two optional behaviors on top of those modes:
+
+- `Orbit`: when an aircraft is selected and the mode is Follow or Chase, MapLibre slowly increases the map bearing while keeping the camera centered near the selected aircraft. Slow is the default; medium is still intentionally restrained. Orbit is most natural in Follow mode because Chase also wants bearing to follow aircraft heading.
+- `Camera Framing`: Center keeps the aircraft near the middle of the viewport. Look Ahead uses aircraft heading, when available, to offset the aircraft slightly behind its direction of travel so more map is visible ahead. Lower Third uses a simple vertical MapLibre camera offset so the aircraft appears lower on the screen.
+
+MapLibre owns camera movement through `easeTo`: center, zoom, pitch, bearing, and offset. deck.gl overlays stay synced because they are rendered on top of the MapLibre camera. React only stores the selected aircraft, camera mode, and cinematic camera settings; it does not render aircraft markers as DOM nodes.
 
 Follow and Chase need an explicit selected aircraft. If the user manually pans, zooms, or rotates while Follow or Chase is active, the app allows the gesture, then the next throttled selected-aircraft update recenters the camera. Camera updates are throttled so high-rate WebSocket streams do not call `easeTo` on every aircraft message.
 
-This is not a cockpit, first-person, or full 3D scene. There is no Three.js, no glTF aircraft model, and no deck.gl `FirstPersonView` in this slice.
+This is still MapLibre camera control, not a cockpit, first-person, or full 3D scene. There is no Three.js, no glTF aircraft model, and no deck.gl `FirstPersonView` in this slice. The offsets are approximate map-camera effects, and Orbit can conflict with Chase because Chase bearing is based on aircraft heading while Orbit bearing is time-based.
 
 Future camera tickets:
 
-1. Offset Chase mode behind the aircraft instead of keeping it centered.
-2. Add deck.gl `ScenegraphLayer` aircraft models.
-3. Experiment with deck.gl `FirstPersonView`.
-4. Use Three.js only if the product needs a custom 3D scene.
+1. Add a selected-aircraft glTF model with deck.gl `ScenegraphLayer`.
+2. Build a standalone deck.gl `FirstPersonView` experiment.
+3. Use Three.js only if the product needs a full custom 3D scene.
 
 ## Real vs Simulated
 
