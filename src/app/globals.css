@@ -33,6 +33,39 @@ button {
   font: inherit;
 }
 
+.not-found-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.not-found-page section {
+  display: grid;
+  gap: 10px;
+  text-align: center;
+}
+
+.not-found-page p,
+.not-found-page h1 {
+  margin: 0;
+}
+
+.not-found-page p {
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.not-found-page h1 {
+  font-size: 28px;
+}
+
+.not-found-page a {
+  color: var(--text);
+}
+
 .dashboard-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 380px;
