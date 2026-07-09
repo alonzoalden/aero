@@ -34,6 +34,15 @@ export type FlightState = FlightPositionUpdate & {
 
 export type FlightDataSource = 'mock' | 'airplanes-live' | 'demo-ops' | 'stress';
 
+export type RuntimeSwitchableFlightDataSource = Extract<FlightDataSource, 'mock' | 'airplanes-live'>;
+
+export type FlightSourceOption = {
+  source: RuntimeSwitchableFlightDataSource;
+  label: string;
+  description: string;
+  pollIntervalMs: number;
+};
+
 export type AircraftVisualMode = 'dots' | 'models' | 'hybrid';
 
 export type ScaleMetrics = {
@@ -53,6 +62,11 @@ export type FlightServerStatus = {
   aircraftCount: number;
   lastPollTimestamp: string | null;
   lastBroadcastTimestamp: string | null;
+  availableSources?: FlightSourceOption[];
+  sourceMode?: 'runtime-switchable' | 'startup-only';
+  sourceDescription?: string;
+  pollIntervalMs?: number;
+  isRuntimeSwitchable?: boolean;
   scaleMetrics?: ScaleMetrics;
 };
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { upsertFlights } from '@/lib/flightState';
+import { replaceFlights, upsertFlights } from '@/lib/flightState';
 import type {
   FlightAlert,
   FlightPositionUpdate,
@@ -49,9 +49,17 @@ export function useFlightStream() {
     function flushMessages() {
       frameId.current = null;
       const batch = pendingMessages.current.splice(0);
+      let lastSnapshotIndex = -1;
+      for (let index = batch.length - 1; index >= 0; index -= 1) {
+        if (batch[index].type === 'snapshot') {
+          lastSnapshotIndex = index;
+          break;
+        }
+      }
+      const messagesToApply = lastSnapshotIndex >= 0 ? batch.slice(lastSnapshotIndex) : batch;
       const latestUpdates = new Map<string, FlightPositionUpdate>();
 
-      for (const message of batch) {
+      for (const message of messagesToApply) {
         const updates = message.type === 'position' ? [message.flight] : message.flights;
         for (const update of updates) {
           latestUpdates.set(update.flightId, update);
@@ -59,7 +67,8 @@ export function useFlightStream() {
       }
 
       setFlightsById((current) => {
-        return upsertFlights(current, Array.from(latestUpdates.values()));
+        const updates = Array.from(latestUpdates.values());
+        return lastSnapshotIndex >= 0 ? replaceFlights(updates) : upsertFlights(current, updates);
       });
 
       const latestAlerts = batch.at(-1)?.alerts;

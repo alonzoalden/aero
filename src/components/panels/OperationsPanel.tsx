@@ -4,7 +4,13 @@ import { AltitudeChart } from '@/components/panels/AltitudeChart';
 import { getDisplayHeadingDeg } from '@/lib/flightHeading';
 import { formatNumber, formatRoute, formatTime } from '@/lib/format';
 import type { ConnectionStatus, FrontendStreamMetrics } from '@/hooks/useFlightStream';
-import type { AircraftVisualMode, FlightAlert, FlightServerStatus, FlightState } from '@/types/flight';
+import type {
+  AircraftVisualMode,
+  FlightAlert,
+  FlightServerStatus,
+  FlightState,
+  RuntimeSwitchableFlightDataSource
+} from '@/types/flight';
 
 type OperationsPanelProps = {
   alerts: FlightAlert[];
@@ -14,7 +20,10 @@ type OperationsPanelProps = {
   frontendMetrics: FrontendStreamMetrics;
   serverStatus: FlightServerStatus | null;
   selectedFlight: FlightState | null;
+  sourceSwitchError: string | null;
+  switchingSource: RuntimeSwitchableFlightDataSource | null;
   onAircraftVisualModeChange: (mode: AircraftVisualMode) => void;
+  onSourceChange: (source: RuntimeSwitchableFlightDataSource) => void;
   onSelectFlight: (flightId: string) => void;
 };
 
@@ -26,7 +35,10 @@ export function OperationsPanel({
   frontendMetrics,
   serverStatus,
   selectedFlight,
+  sourceSwitchError,
+  switchingSource,
   onAircraftVisualModeChange,
+  onSourceChange,
   onSelectFlight
 }: OperationsPanelProps) {
   const isStressMode = serverStatus?.source === 'stress';
@@ -35,6 +47,12 @@ export function OperationsPanel({
   const hiddenFlightCount = Math.max(0, flights.length - visibleFlights.length);
   const scaleMetrics = serverStatus?.scaleMetrics;
   const selectedHeadingDeg = selectedFlight ? getDisplayHeadingDeg(selectedFlight) : null;
+  const sourceOptions = serverStatus?.availableSources ?? [];
+  const sourceNote =
+    serverStatus?.sourceDescription ??
+    (serverStatus?.source === 'airplanes-live'
+      ? 'Real public ADS-B-derived data; updates are externally polled and may be slower.'
+      : 'Simulated data for smoother demo behavior.');
 
   return (
     <aside className="ops-panel">
@@ -63,6 +81,33 @@ export function OperationsPanel({
         {isDemoOpsMode ? (
           <p className="muted source-note">Demo Ops is synthetic data designed to show frontend/live-ops behavior.</p>
         ) : null}
+      </section>
+
+      <section className="panel-section">
+        <div className="section-heading-row">
+          <h2>Data Source</h2>
+          <strong>{switchingSource ? 'switching' : serverStatus?.source ?? 'unknown'}</strong>
+        </div>
+        {sourceOptions.length > 0 ? (
+          <div className="source-segment" aria-label="Data source">
+            {sourceOptions.map((option) => (
+              <button
+                aria-pressed={serverStatus?.source === option.source}
+                className={serverStatus?.source === option.source ? 'mode-button active' : 'mode-button'}
+                disabled={Boolean(switchingSource)}
+                key={option.source}
+                onClick={() => onSourceChange(option.source)}
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="muted source-note">This source is startup-only for this demo slice.</p>
+        )}
+        <p className="muted source-note">{sourceNote}</p>
+        {sourceSwitchError ? <p className="source-error">{sourceSwitchError}</p> : null}
       </section>
 
       {isStressMode ? (

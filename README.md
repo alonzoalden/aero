@@ -16,9 +16,9 @@ Or run both processes together:
 npm run dev:all
 ```
 
-Open `http://localhost:3000`. The app expects flight updates from `ws://localhost:8787`. Override with `NEXT_PUBLIC_FLIGHT_WS_URL` if needed.
+Open `http://localhost:3000`. The app expects flight updates from `ws://localhost:8787`. Override with `NEXT_PUBLIC_FLIGHT_WS_URL` if needed. The browser posts data-source changes to `http://localhost:8787`; override with `NEXT_PUBLIC_FLIGHT_API_URL` if your backend runs somewhere else.
 
-The backend defaults to simulated mock data. To use public ADS-B data from Airplanes.live:
+The backend defaults to simulated mock data. `FLIGHT_DATA_SOURCE` controls the initial source at server startup. For `mock` and `airplanes-live`, the Operations panel can switch sources at runtime without restarting the server. To start directly on public ADS-B data from Airplanes.live:
 
 ```bash
 FLIGHT_DATA_SOURCE=airplanes-live npm run dev:server
@@ -129,12 +129,23 @@ Future 3D tickets:
 
 ## Real vs Simulated
 
-- `FLIGHT_DATA_SOURCE=mock` uses a small, simple, predictable local sample with hardcoded airport pairs and mock alerts.
-- `FLIGHT_DATA_SOURCE=airplanes-live` polls `https://api.airplanes.live/v2/point/33.9416/-118.4085/100` every 10 seconds and streams normalized public ADS-B-derived aircraft near LAX. It is real provider data, but intentionally conservative and REST-polled.
+- `FLIGHT_DATA_SOURCE=mock` starts in the default smooth demo mode. Mock uses a small, predictable local sample with hardcoded airport pairs and mock alerts, and can be selected at runtime from the Operations panel.
+- `FLIGHT_DATA_SOURCE=airplanes-live` starts on real public ADS-B-derived data from `https://api.airplanes.live/v2/point/33.9416/-118.4085/100`. It is intentionally conservative and REST-polled every 10 seconds by default, and can be selected at runtime from the Operations panel.
 - `FLIGHT_DATA_SOURCE=demo-ops` is synthetic operational demo data around Southern California/LAX. It simulates faster WebSocket updates, route context, departures, arrivals, regional traffic, cargo callsigns, holding patterns, low-altitude tracks, and demo-only alerts.
-- `FLIGHT_DATA_SOURCE=stress` is local-only scale/load simulation around Southern California. It is not ADS-B data and is meant to demonstrate backend coalescing and frontend rendering behavior.
+- `FLIGHT_DATA_SOURCE=stress` is local-only scale/load simulation around Southern California. It remains startup-only, is not ADS-B data, and is meant to demonstrate backend coalescing and frontend rendering behavior.
 - Airplanes.live records may not include route facts such as origin or destination. The UI displays those fields as `unknown`; it does not fabricate them.
 - Alerts in `mock` and `demo-ops` are simulated examples only. Weather, route planning, persistence, auth, queues, and deployment are intentionally out of scope.
+
+## Runtime Data Source Switcher
+
+The Operations panel includes a `Data Source` control for switching between:
+
+- `Simulated Demo` -> `mock`
+- `Real ADS-B` -> `airplanes-live`
+
+The frontend does not call Airplanes.live directly. It posts `{ "source": "mock" }` or `{ "source": "airplanes-live" }` to the local Express backend at `POST /api/source`. The backend owns provider replacement, cache clearing, polling cadence, and WebSocket fan-out. On switch, the backend broadcasts a fresh snapshot so mock and live aircraft do not remain mixed in the frontend state.
+
+`stress` and `demo-ops` remain startup-only in this slice. That keeps the public demo default controlled while preserving the Scale Lab and richer demo-ops modes for explicit runs.
 
 ## Demo Ops
 

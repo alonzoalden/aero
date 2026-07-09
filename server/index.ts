@@ -8,23 +8,44 @@ import { createMockProvider } from './mockProvider';
 import { createStressProvider } from './stressProvider';
 import { createWebSocketFlightServer } from './websocketServer';
 import type { AircraftProvider } from './aircraftProvider';
-import type { FlightAlert, FlightServerStatus, FlightStreamMessage, ScaleMetrics } from '../src/types/flight';
+import type {
+  FlightAlert,
+  FlightDataSource,
+  FlightPositionUpdate,
+  FlightServerStatus,
+  FlightSourceOption,
+  FlightStreamMessage,
+  RuntimeSwitchableFlightDataSource,
+  ScaleMetrics
+} from '../src/types/flight';
 
 const app = express();
 const httpServer = http.createServer(app);
 const store = new FlightHistoryStore();
-const provider: AircraftProvider | null =
-  config.dataSource === 'stress' || config.dataSource === 'demo-ops'
-    ? null
-    : config.dataSource === 'airplanes-live'
-      ? createAirplanesLiveProvider(config.airplanesLiveUrl)
-      : createMockProvider();
-const stressProvider =
-  config.dataSource === 'stress' ? createStressProvider(config.stress.aircraftCount) : null;
-const demoOpsProvider =
-  config.dataSource === 'demo-ops' ? createDemoOpsProvider(config.demoOps.aircraftCount) : null;
+const stressProvider = config.dataSource === 'stress' ? createStressProvider(config.stress.aircraftCount) : null;
+const demoOpsProvider = config.dataSource === 'demo-ops' ? createDemoOpsProvider(config.demoOps.aircraftCount) : null;
+const runtimeSourceOptions: FlightSourceOption[] = [
+  {
+    source: 'mock',
+    label: 'Simulated Demo',
+    description: 'Simulated data for smoother demo behavior.',
+    pollIntervalMs: 1000
+  },
+  {
+    source: 'airplanes-live',
+    label: 'Real ADS-B',
+    description: 'Real public ADS-B-derived data; updates are externally polled and may be slower.',
+    pollIntervalMs: config.airplanesLivePollMs
+  }
+];
 
 let alerts: FlightAlert[] = [];
+let activeSource: FlightDataSource = config.dataSource;
+let runtimeProvider: AircraftProvider | null = isRuntimeSwitchableSource(config.dataSource)
+  ? createRuntimeProvider(config.dataSource)
+  : null;
+let runtimePollTimer: ReturnType<typeof setInterval> | null = null;
+let runtimePollGeneration = 0;
 let lastPollTimestamp: string | null = null;
 let lastBroadcastTimestamp: string | null = null;
 let sequence = 0;
@@ -36,6 +57,20 @@ let aircraftUpdatesBroadcastThisSecond = 0;
 let aircraftUpdatesBroadcastPerSec = 0;
 let coalescedUpdateCount = 0;
 let rawUpdatesSinceBroadcast = 0;
+
+app.use((request, response, next) => {
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  response.setHeader('Access-Control-Allow-Headers', 'content-type');
+  response.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+
+  if (request.method === 'OPTIONS') {
+    response.sendStatus(204);
+    return;
+  }
+
+  next();
+});
+app.use(express.json());
 
 const socketServer = createWebSocketFlightServer({
   server: httpServer,
@@ -52,9 +87,46 @@ app.get('/api/status', (_request, response) => {
   response.json(getStatus());
 });
 
+app.get('/api/sources', (_request, response) => {
+  response.json({
+    currentSource: activeSource,
+    availableSources: runtimeSourceOptions,
+    isRuntimeSwitchable: isRuntimeSwitchableSource(activeSource)
+  });
+});
+
+app.post('/api/source', async (request, response) => {
+  if (!isRuntimeSwitchableSource(activeSource)) {
+    response.status(409).json({
+      error: `${activeSource} is startup-only in this demo slice.`,
+      status: getStatus()
+    });
+    return;
+  }
+
+  const requestedSource = readRequestedSource(request.body);
+  if (!requestedSource) {
+    response.status(400).json({
+      error: 'source must be mock or airplanes-live',
+      status: getStatus()
+    });
+    return;
+  }
+
+  try {
+    await switchRuntimeSource(requestedSource);
+    response.json(getStatus());
+  } catch (error) {
+    response.status(502).json({
+      error: error instanceof Error ? error.message : 'Failed to switch source',
+      status: getStatus()
+    });
+  }
+});
+
 httpServer.listen(config.port, () => {
   console.log(`Live Airspace Pulse backend listening on http://localhost:${config.port}`);
-  console.log(`Flight data source: ${config.dataSource}`);
+  console.log(`Flight data source: ${activeSource}`);
   if (config.dataSource === 'stress') {
     console.log(
       `Stress mode: ${config.stress.aircraftCount} aircraft, ` +
@@ -74,10 +146,8 @@ if (stressProvider) {
 } else if (demoOpsProvider) {
   startDemoOpsMode();
 } else {
-  void pollProvider();
-  setInterval(() => {
-    void pollProvider();
-  }, config.dataSource === 'airplanes-live' ? config.airplanesLivePollMs : 1000);
+  startRuntimePolling();
+  void pollRuntimeProvider('snapshot');
 }
 
 setInterval(() => {
@@ -89,31 +159,75 @@ setInterval(() => {
   aircraftUpdatesBroadcastThisSecond = 0;
 }, 1000);
 
-async function pollProvider() {
-  if (!provider) {
-    return;
+async function pollRuntimeProvider(messageType: 'batch' | 'snapshot' = 'batch') {
+  if (!runtimeProvider) {
+    return false;
   }
+
+  const generation = runtimePollGeneration;
+  const provider = runtimeProvider;
 
   try {
     const result = await provider.getSnapshot();
+    if (generation !== runtimePollGeneration || provider !== runtimeProvider) {
+      return;
+    }
+
     lastPollTimestamp = new Date().toISOString();
     alerts = result.alerts;
+    if (messageType === 'snapshot') {
+      store.clear();
+    }
     store.upsertMany(result.flights);
     lastBroadcastTimestamp = new Date().toISOString();
-
-    const message: FlightStreamMessage = {
-      type: 'batch',
-      flights: result.flights,
-      alerts,
-      status: getStatus(),
-      sequence: nextSequence(),
-      serverTimestamp: lastBroadcastTimestamp
-    };
-
-    webSocketMessagesThisSecond += socketServer.broadcast(message);
+    broadcastFlights(messageType, result.flights, lastBroadcastTimestamp);
+    return true;
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
+    return false;
   }
+}
+
+function startRuntimePolling() {
+  stopRuntimePolling();
+  runtimePollTimer = setInterval(() => {
+    void pollRuntimeProvider();
+  }, getActivePollIntervalMs());
+}
+
+function stopRuntimePolling() {
+  if (runtimePollTimer) {
+    clearInterval(runtimePollTimer);
+    runtimePollTimer = null;
+  }
+}
+
+async function switchRuntimeSource(source: RuntimeSwitchableFlightDataSource) {
+  runtimePollGeneration += 1;
+  stopRuntimePolling();
+  activeSource = source;
+  runtimeProvider = createRuntimeProvider(source);
+  alerts = [];
+  lastPollTimestamp = null;
+  store.clear();
+  const timestamp = new Date().toISOString();
+  lastBroadcastTimestamp = timestamp;
+  broadcastFlights('snapshot', [], timestamp);
+  startRuntimePolling();
+  await pollRuntimeProvider('snapshot');
+}
+
+function broadcastFlights(type: 'batch' | 'snapshot', flights: FlightPositionUpdate[], timestamp: string) {
+  const message: FlightStreamMessage = {
+    type,
+    flights,
+    alerts,
+    status: getStatus(),
+    sequence: nextSequence(),
+    serverTimestamp: timestamp
+  };
+
+  webSocketMessagesThisSecond += socketServer.broadcast(message);
 }
 
 function startDemoOpsMode() {
@@ -193,7 +307,7 @@ function startStressMode() {
 
 function getStatus(): FlightServerStatus {
   const scaleMetrics: ScaleMetrics | undefined =
-    config.dataSource === 'stress'
+    activeSource === 'stress'
       ? {
           ingestUpdatesPerSec,
           webSocketMessagesPerSec,
@@ -207,13 +321,52 @@ function getStatus(): FlightServerStatus {
       : undefined;
 
   return {
-    source: config.dataSource,
+    source: activeSource,
     connectedClients: socketServer.clientCount,
-    aircraftCount: stressProvider?.aircraftCount ?? demoOpsProvider?.aircraftCount ?? store.aircraftCount,
+    aircraftCount: getCurrentAircraftCount(),
     lastPollTimestamp,
     lastBroadcastTimestamp,
+    availableSources: isRuntimeSwitchableSource(activeSource) ? runtimeSourceOptions : undefined,
+    sourceMode: isRuntimeSwitchableSource(activeSource) ? 'runtime-switchable' : 'startup-only',
+    sourceDescription: getSourceDescription(activeSource),
+    pollIntervalMs: isRuntimeSwitchableSource(activeSource) ? getActivePollIntervalMs() : undefined,
+    isRuntimeSwitchable: isRuntimeSwitchableSource(activeSource),
     scaleMetrics
   };
+}
+
+function getCurrentAircraftCount() {
+  return stressProvider?.aircraftCount ?? demoOpsProvider?.aircraftCount ?? store.aircraftCount;
+}
+
+function getActivePollIntervalMs() {
+  return activeSource === 'airplanes-live' ? config.airplanesLivePollMs : 1000;
+}
+
+function getSourceDescription(source: FlightDataSource) {
+  return (
+    runtimeSourceOptions.find((option) => option.source === source)?.description ??
+    (source === 'demo-ops'
+      ? 'Synthetic operational demo data designed to show frontend/live-ops behavior.'
+      : 'Startup-only scale/load simulation for local rendering and WebSocket throughput checks.')
+  );
+}
+
+function createRuntimeProvider(source: RuntimeSwitchableFlightDataSource): AircraftProvider {
+  return source === 'airplanes-live' ? createAirplanesLiveProvider(config.airplanesLiveUrl) : createMockProvider();
+}
+
+function isRuntimeSwitchableSource(source: FlightDataSource): source is RuntimeSwitchableFlightDataSource {
+  return source === 'mock' || source === 'airplanes-live';
+}
+
+function readRequestedSource(body: unknown): RuntimeSwitchableFlightDataSource | null {
+  if (!body || typeof body !== 'object') {
+    return null;
+  }
+
+  const source = (body as { source?: unknown }).source;
+  return source === 'mock' || source === 'airplanes-live' ? source : null;
 }
 
 function nextSequence() {

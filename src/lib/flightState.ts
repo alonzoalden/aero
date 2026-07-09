@@ -26,6 +26,10 @@ export function upsertFlights(
   return next;
 }
 
+export function replaceFlights(updates: FlightPositionUpdate[]): Record<string, FlightState> {
+  return upsertFlights({}, updates);
+}
+
 function mergeFlight(previous: FlightState | undefined, update: FlightPositionUpdate): FlightState {
   const trackPoint = {
     lat: update.lat,

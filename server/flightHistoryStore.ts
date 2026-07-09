@@ -26,6 +26,11 @@ export class FlightHistoryStore {
     return Array.from(this.latestAircraft.values());
   }
 
+  clear() {
+    this.latestAircraft.clear();
+    this.historyByAircraft.clear();
+  }
+
   get aircraftCount() {
     return this.latestAircraft.size;
   }

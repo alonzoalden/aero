@@ -364,6 +364,12 @@ button {
   gap: 6px;
 }
 
+.source-segment {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
 .mode-button {
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -372,6 +378,11 @@ button {
   padding: 8px;
   text-transform: capitalize;
   cursor: pointer;
+}
+
+.mode-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .mode-button.active {
@@ -387,6 +398,13 @@ button {
 
 .source-note {
   margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.source-error {
+  margin: 10px 0 0;
+  color: var(--danger);
   font-size: 13px;
   line-height: 1.4;
 }
