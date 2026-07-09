@@ -270,6 +270,7 @@ export function FlightMap({
               easing: smoothTransitionEasing
             }
           };
+      const dotPositionTransitions = effectiveVisualMode === 'hybrid' ? undefined : positionTransitions;
       const modelTransitions =
         modelFlights.length > 250
           ? undefined
@@ -299,7 +300,7 @@ export function FlightMap({
             pickable: true,
             stroked: true,
             getPosition: (flight) => [flight.lon, flight.lat],
-            transitions: positionTransitions,
+            transitions: dotPositionTransitions,
             getRadius: (flight) =>
               flight.flightId === selectedFlightId && effectiveVisualMode !== 'hybrid'
                 ? 70000
@@ -328,7 +329,7 @@ export function FlightMap({
       const selectedAircraftHaloLayer =
         effectiveVisualMode === 'hybrid' && selectedFlight
           ? new ScatterplotLayer<FlightState>({
-              id: 'selected-aircraft-halo',
+              id: `selected-aircraft-halo-${selectedFlight.flightId}`,
               data: [selectedFlight],
               pickable: false,
               stroked: true,
@@ -347,7 +348,7 @@ export function FlightMap({
       const aircraftModelLayer =
         modelFlights.length > 0
           ? new ScenegraphLayer<FlightState>({
-              id: 'aircraft-models',
+              id: effectiveVisualMode === 'hybrid' ? `selected-aircraft-model-${selectedFlightId}` : 'aircraft-models',
               data: modelFlights,
               scenegraph: aircraftModelUrl,
               pickable: true,
@@ -382,7 +383,7 @@ export function FlightMap({
       const selectedLabelFlights = effectiveVisualMode !== 'dots' && selectedFlight ? [selectedFlight] : [];
       const labelFlights = showAllLabels ? flights : selectedLabelFlights;
       const aircraftLabelLayer = new TextLayer<FlightState>({
-        id: 'aircraft-labels',
+        id: showAllLabels ? 'aircraft-labels' : `selected-aircraft-label-${selectedFlight?.flightId ?? 'none'}`,
         data: labelFlights,
         getPosition: (flight) => [flight.lon, flight.lat],
         transitions: positionTransitions,
