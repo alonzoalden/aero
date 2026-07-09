@@ -18,7 +18,9 @@ export function FlightOpsDashboard() {
     orbitSpeed: 'slow',
     framing: 'center'
   });
-  const selectedFlight = selectedFlightId ? flightsById[selectedFlightId] ?? null : null;
+  const effectiveSelectedFlightId =
+    selectedFlightId && flightsById[selectedFlightId] ? selectedFlightId : flights[0]?.flightId ?? null;
+  const selectedFlight = effectiveSelectedFlightId ? flightsById[effectiveSelectedFlightId] ?? null : null;
 
   return (
     <main className="dashboard-shell">

@@ -90,14 +90,27 @@ Aircraft can render in three visual modes:
 - `Dots`: the original deck.gl `ScatterplotLayer` circle markers plus labels when density is low. This remains the best view for stress mode and very high aircraft counts.
 - `Models`: a deck.gl `ScenegraphLayer` renders a local glTF/GLB airplane model for every aircraft while the count is below the demo safety cap.
 - `Hybrid`: the selected aircraft renders as a 3D model and the rest remain dots. This is the default because it gives a clear selected-aircraft visual without paying the cost of thousands of model instances.
+- `Proof`: a fixed ScenegraphLayer test aircraft renders near LAX with dots suppressed, so model rendering can be verified without depending on stream state.
 
-The model asset is `public/models/airplane.glb`, a small generated low-poly demo model created for this repo. glTF/GLB is the model format because deck.gl `ScenegraphLayer` can load it directly. MapLibre still owns the basemap, map style, pan, zoom, pitch, bearing, and camera easing. deck.gl remains the geospatial overlay renderer, and its aircraft layers stay synced to the MapLibre camera through `MapboxOverlay`.
+The model asset is `public/models/airplane.glb`, a generated low-poly demo aircraft created for this repo by `scripts/create-airplane-glb.mjs`. It is not downloaded from a third-party model site and has no external license dependency. The generated shape intentionally includes a fuselage, nose, broad wings, horizontal stabilizer, and vertical tail so ScenegraphLayer draws something recognizable at map scale.
+
+Use this verification command after changing the model:
+
+```bash
+npm run verify:model
+```
+
+The verifier checks the GLB magic/version, mesh and primitive counts, vertex and index counts, triangle count, and accessor bounds. It fails if the file has no mesh geometry. This matters because a technically valid GLB can still be too tiny or too abstract to prove the aircraft overlay is working.
+
+glTF/GLB is the model format because deck.gl `ScenegraphLayer` can load it directly. MapLibre still owns the basemap, map style, pan, zoom, pitch, bearing, and camera easing. deck.gl remains the geospatial overlay renderer, and its aircraft layers stay synced to the MapLibre camera through `MapboxOverlay`.
 
 This does not require Three.js yet because the app is not building a standalone 3D scene. The goal is still a map-first operational dashboard: MapLibre provides geographic context, deck.gl renders GPU overlays, and React owns the controls and selected-flight state. A future Three.js slice would only make sense if the product needed a full custom 3D world, cockpit view, hangar scene, or non-map camera system.
 
 The model layer uses aircraft `headingDeg` for orientation and keeps the correction in `AIRCRAFT_MODEL_YAW_OFFSET_DEG` because model forward axes vary by asset. The generated model points along local `+Y`, so the current offset is `0`. ADS-B altitude is feet, while deck.gl elevation is meters; the implementation converts feet to meters and applies a small readability scale with clamps so aircraft remain visible over the map instead of trying to be a precise flight simulator.
 
 Models are capped at 300 aircraft in this demo. If the user selects `Models` above that threshold, the map falls back to dots and the UI explains why. Dots remain useful because high-density geospatial views need legibility and predictable local performance more than per-aircraft 3D detail.
+
+The default `Hybrid` mode auto-selects the first arriving aircraft, then renders that selected aircraft as the dominant ScenegraphLayer model while keeping smaller, fainter dots for surrounding context. `Proof` mode is a debug mode that always renders one obvious model instance at a fixed test position near LAX. The map also shows a diagnostics readout with the asset URL, fetch status, draw status, byte size, model status, active model count, current visual mode, effective visual mode, and exact fallback reason.
 
 Known limitations:
 
@@ -177,6 +190,7 @@ Angular components and templates map roughly to React components and JSX. Angula
 - `npm run build`: create a production build.
 - `npm run typecheck`: run TypeScript checks.
 - `npm run lint`: run ESLint.
+- `npm run verify:model`: inspect `public/models/airplane.glb` and fail if it has no mesh geometry.
 
 ## Interview Talking Points
 

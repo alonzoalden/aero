@@ -8,7 +8,8 @@
     "dev:all": "concurrently -n next,ws -c blue,green \"npm run dev\" \"npm run dev:server\"",
     "build": "next build",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:model": "node scripts/verify-airplane-glb.mjs"
   },
   "dependencies": {
     "@deck.gl/core": "^9.1.0",

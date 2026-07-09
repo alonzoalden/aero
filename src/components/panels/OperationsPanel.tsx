@@ -106,7 +106,7 @@ export function OperationsPanel({
           <strong>{aircraftVisualMode}</strong>
         </div>
         <div className="mode-segment" aria-label="Aircraft visual mode">
-          {(['dots', 'models', 'hybrid'] as const).map((mode) => (
+          {(['dots', 'models', 'hybrid', 'proof'] as const).map((mode) => (
             <button
               aria-pressed={aircraftVisualMode === mode}
               className={aircraftVisualMode === mode ? 'mode-button active' : 'mode-button'}
@@ -122,9 +122,11 @@ export function OperationsPanel({
           {modelFallbackIsActive
             ? `Models are capped at ${aircraftModelThreshold} aircraft for this demo, so the map is using dots.`
             : aircraftVisualMode === 'hybrid'
-              ? 'Hybrid draws the selected aircraft as a model while keeping dot halos visible as a fallback.'
+              ? 'Hybrid draws the selected aircraft as a dominant model while keeping small faint dots for context.'
+              : aircraftVisualMode === 'proof'
+                ? 'Proof draws one fixed ScenegraphLayer test aircraft near LAX with dots suppressed.'
               : aircraftVisualMode === 'models'
-                ? 'Models use deck.gl ScenegraphLayer over dot halos when the count is below the demo safety cap.'
+                ? 'Models use deck.gl ScenegraphLayer only when the count is below the demo safety cap.'
                 : 'Dots keep high-density and stress-mode views readable.'}
         </p>
       </section>
@@ -158,7 +160,9 @@ export function OperationsPanel({
           </div>
         ) : (
           <p className="muted">
-            {flights.length > 0 ? 'Select an aircraft from the map or list.' : 'Start the local backend to receive aircraft.'}
+            {flights.length > 0
+              ? 'The first aircraft is selected automatically; select another aircraft from the map or list.'
+              : 'Start the local backend to receive aircraft, or use proof mode to verify the local model.'}
           </p>
         )}
       </section>
