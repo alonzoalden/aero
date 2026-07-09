@@ -6,7 +6,27 @@ export function upsertFlight(
   flightsById: Record<string, FlightState>,
   update: FlightPositionUpdate
 ): Record<string, FlightState> {
-  const previous = flightsById[update.flightId];
+  return upsertFlights(flightsById, [update]);
+}
+
+export function upsertFlights(
+  flightsById: Record<string, FlightState>,
+  updates: FlightPositionUpdate[]
+): Record<string, FlightState> {
+  if (updates.length === 0) {
+    return flightsById;
+  }
+
+  const next = { ...flightsById };
+
+  for (const update of updates) {
+    next[update.flightId] = mergeFlight(next[update.flightId], update);
+  }
+
+  return next;
+}
+
+function mergeFlight(previous: FlightState | undefined, update: FlightPositionUpdate): FlightState {
   const trackPoint = {
     lat: update.lat,
     lon: update.lon,
@@ -17,10 +37,7 @@ export function upsertFlight(
   };
 
   return {
-    ...flightsById,
-    [update.flightId]: {
-      ...update,
-      track: [...(previous?.track ?? []), trackPoint].slice(-maxTrackPoints)
-    }
+    ...update,
+    track: [...(previous?.track ?? []), trackPoint].slice(-maxTrackPoints)
   };
 }

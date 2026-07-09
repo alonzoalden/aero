@@ -58,7 +58,8 @@ button {
 }
 
 .map-title,
-.map-hover-card {
+.map-hover-card,
+.camera-control {
   position: absolute;
   z-index: 2;
   border: 1px solid rgb(148 163 184 / 24%);
@@ -93,6 +94,57 @@ button {
   width: 220px;
   padding: 12px;
   font-size: 13px;
+}
+
+.camera-control {
+  top: 16px;
+  right: 16px;
+  display: grid;
+  gap: 8px;
+  width: 250px;
+  padding: 10px;
+}
+
+.camera-control-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.camera-control-header span,
+.camera-note {
+  color: var(--muted);
+}
+
+.camera-control-header strong {
+  text-transform: capitalize;
+}
+
+.camera-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.camera-button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #0a1422;
+  color: var(--text);
+  padding: 7px 8px;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.camera-button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.camera-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .ops-panel {
@@ -171,6 +223,15 @@ button {
 
 .detail-grid span {
   color: var(--muted);
+}
+
+.scale-lab {
+  border-color: rgb(56 189 248 / 46%);
+}
+
+.list-summary {
+  margin: 0 0 10px;
+  font-size: 13px;
 }
 
 .flight-list,
