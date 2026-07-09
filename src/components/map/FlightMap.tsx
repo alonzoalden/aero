@@ -23,13 +23,15 @@ type FlightMapProps = {
   onSelectFlight: (flightId: string) => void;
 };
 
+type AircraftModelStatus = 'checking' | 'ready' | 'failed';
+
 const mapStyle = 'https://demotiles.maplibre.org/style.json';
 const aircraftModelUrl = '/models/airplane.glb';
 const aircraftModelThreshold = 300;
 const feetToMeters = 0.3048;
-const altitudeVisualScale = 0.08;
-const aircraftModelScaleMeters = 850;
-const selectedAircraftModelScaleMeters = 1300;
+const altitudeVisualScale = 0.02;
+const aircraftModelScaleMeters = 2200;
+const selectedAircraftModelScaleMeters = 3200;
 const AIRCRAFT_MODEL_YAW_OFFSET_DEG = 0;
 const minCameraUpdateMs = 700;
 const minOrbitUpdateMs = 900;
@@ -64,7 +66,7 @@ function getReadableAltitudeMeters(flight: FlightState) {
 
   const altitudeMeters = flight.altitudeFt * feetToMeters;
 
-  return Math.min(Math.max(altitudeMeters * altitudeVisualScale, 80), 1800);
+  return Math.min(Math.max(altitudeMeters * altitudeVisualScale, 20), 500);
 }
 
 function getAircraftOrientation(flight: FlightState): [number, number, number] {
@@ -97,23 +99,24 @@ export function FlightMap({
   const cameraSettingsRef = useRef(cameraSettings);
   const selectedFlightRef = useRef(selectedFlight);
   const [hovered, setHovered] = useState<FlightState | null>(null);
+  const [aircraftModelStatus, setAircraftModelStatus] = useState<AircraftModelStatus>('checking');
   const isDense = flights.length > 250;
   const shouldFallbackToDots = aircraftVisualMode === 'models' && flights.length > aircraftModelThreshold;
   const effectiveVisualMode: AircraftVisualMode = shouldFallbackToDots ? 'dots' : aircraftVisualMode;
+  const modelLayerIsAllowed = aircraftModelStatus === 'ready';
+  const modelLayerFallbackIsActive =
+    aircraftModelStatus === 'failed' && (aircraftVisualMode === 'models' || aircraftVisualMode === 'hybrid');
   const cameraNeedsSelection = cameraMode !== 'free' && !selectedFlight;
   const orbitIsActive = cameraMode !== 'free' && cameraSettings.orbitEnabled && Boolean(selectedFlight);
 
   const layers = useMemo(
     () => {
       const selectedFlights = selectedFlight ? [selectedFlight] : [];
-      const dotFlights =
-        effectiveVisualMode === 'hybrid' && selectedFlightId
-          ? flights.filter((flight) => flight.flightId !== selectedFlightId)
-          : flights;
+      const dotFlights = flights;
       const modelFlights =
-        effectiveVisualMode === 'models'
+        modelLayerIsAllowed && effectiveVisualMode === 'models'
           ? flights
-          : effectiveVisualMode === 'hybrid'
+          : modelLayerIsAllowed && effectiveVisualMode === 'hybrid'
             ? selectedFlights
             : [];
 
@@ -138,32 +141,40 @@ export function FlightMap({
         }
       });
 
-      const aircraftModelLayer = new ScenegraphLayer<FlightState>({
-        id: 'aircraft-models',
-        data: modelFlights,
-        scenegraph: aircraftModelUrl,
-        pickable: true,
-        sizeScale: 1,
-        sizeMinPixels: 18,
-        sizeMaxPixels: 52,
-        _lighting: 'pbr',
-        getPosition: (flight) => [flight.lon, flight.lat, getReadableAltitudeMeters(flight)],
-        getOrientation: getAircraftOrientation,
-        getScale: (flight) => {
-          const scale =
-            flight.flightId === selectedFlightId ? selectedAircraftModelScaleMeters : aircraftModelScaleMeters;
+      const aircraftModelLayer =
+        modelFlights.length > 0
+          ? new ScenegraphLayer<FlightState>({
+              id: 'aircraft-models',
+              data: modelFlights,
+              scenegraph: aircraftModelUrl,
+              pickable: true,
+              sizeScale: 1,
+              sizeMinPixels: 34,
+              sizeMaxPixels: 112,
+              _lighting: 'flat',
+              getPosition: (flight) => [flight.lon, flight.lat, getReadableAltitudeMeters(flight)],
+              getOrientation: getAircraftOrientation,
+              getScale: (flight) => {
+                const scale =
+                  flight.flightId === selectedFlightId ? selectedAircraftModelScaleMeters : aircraftModelScaleMeters;
 
-          return [scale, scale, scale];
-        },
-        getColor: (flight) =>
-          flight.flightId === selectedFlightId ? [250, 204, 21, 255] : [125, 211, 252, 245],
-        onHover: (info: PickingInfo<FlightState>) => setHovered(info.object ?? null),
-        onClick: (info: PickingInfo<FlightState>) => {
-          if (info.object) {
-            onSelectFlight(info.object.flightId);
-          }
-        }
-      });
+                return [scale, scale, scale];
+              },
+              getColor: (flight) =>
+                flight.flightId === selectedFlightId ? [250, 204, 21, 255] : [125, 211, 252, 245],
+              onError: (error) => {
+                console.warn('Aircraft model layer failed; falling back to dots.', error);
+                setAircraftModelStatus('failed');
+                return true;
+              },
+              onHover: (info: PickingInfo<FlightState>) => setHovered(info.object ?? null),
+              onClick: (info: PickingInfo<FlightState>) => {
+                if (info.object) {
+                  onSelectFlight(info.object.flightId);
+                }
+              }
+            })
+          : null;
 
       const showAllLabels = effectiveVisualMode === 'dots' && !isDense;
       const selectedLabelFlights = effectiveVisualMode !== 'dots' ? selectedFlights : [];
@@ -178,18 +189,63 @@ export function FlightMap({
         getColor: [226, 232, 240, 240]
       });
 
+      function withModelLayer(
+        baseLayers: Array<ScatterplotLayer<FlightState> | ScenegraphLayer<FlightState> | TextLayer<FlightState>>
+      ) {
+        if (aircraftModelLayer) {
+          return [...baseLayers, aircraftModelLayer, aircraftLabelLayer];
+        }
+
+        return [...baseLayers, aircraftLabelLayer];
+      }
+
       if (effectiveVisualMode === 'models') {
-        return [aircraftModelLayer, aircraftLabelLayer];
+        return withModelLayer([aircraftDotLayer]);
       }
 
       if (effectiveVisualMode === 'hybrid') {
-        return [aircraftDotLayer, aircraftModelLayer, aircraftLabelLayer];
+        return withModelLayer([aircraftDotLayer]);
       }
 
       return isDense ? [aircraftDotLayer] : [aircraftDotLayer, aircraftLabelLayer];
     },
-    [effectiveVisualMode, flights, isDense, onSelectFlight, selectedFlight, selectedFlightId]
+    [effectiveVisualMode, flights, isDense, modelLayerIsAllowed, onSelectFlight, selectedFlight, selectedFlightId]
   );
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function checkAircraftModel() {
+      try {
+        const response = await fetch(aircraftModelUrl, { cache: 'no-store' });
+
+        if (!response.ok) {
+          throw new Error(`Aircraft model request failed with ${response.status}`);
+        }
+
+        const modelBytes = await response.arrayBuffer();
+
+        if (modelBytes.byteLength === 0) {
+          throw new Error('Aircraft model response was empty');
+        }
+
+        if (!isCancelled) {
+          setAircraftModelStatus('ready');
+        }
+      } catch (error) {
+        console.warn('Aircraft model asset is unavailable; falling back to dots.', error);
+        if (!isCancelled) {
+          setAircraftModelStatus('failed');
+        }
+      }
+    }
+
+    checkAircraftModel();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -349,6 +405,8 @@ export function FlightMap({
         <span>Aircraft Style</span>
         <strong>{effectiveVisualMode}</strong>
         {shouldFallbackToDots ? <small>Model cap hit: dots fallback</small> : null}
+        {modelLayerFallbackIsActive ? <small>Model unavailable: dots fallback</small> : null}
+        {aircraftModelStatus === 'checking' && effectiveVisualMode !== 'dots' ? <small>Checking model asset</small> : null}
       </div>
       <div className="camera-control" aria-label="Camera mode">
         <div className="camera-control-header">

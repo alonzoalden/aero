@@ -122,9 +122,9 @@ export function OperationsPanel({
           {modelFallbackIsActive
             ? `Models are capped at ${aircraftModelThreshold} aircraft for this demo, so the map is using dots.`
             : aircraftVisualMode === 'hybrid'
-              ? 'Hybrid draws the selected aircraft as a model and keeps the rest as fast dots.'
+              ? 'Hybrid draws the selected aircraft as a model while keeping dot halos visible as a fallback.'
               : aircraftVisualMode === 'models'
-                ? 'Models use deck.gl ScenegraphLayer when the aircraft count is below the demo safety cap.'
+                ? 'Models use deck.gl ScenegraphLayer over dot halos when the count is below the demo safety cap.'
                 : 'Dots keep high-density and stress-mode views readable.'}
         </p>
       </section>
