@@ -6,6 +6,14 @@ export function formatTime(value: string): string {
   }).format(new Date(value));
 }
 
-export function formatNumber(value: number): string {
+export function formatNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return 'unknown';
+  }
+
   return new Intl.NumberFormat('en-US').format(Math.round(value));
+}
+
+export function formatRoute(origin?: string | null, destination?: string | null): string {
+  return `${origin || 'unknown'} to ${destination || 'unknown'}`;
 }

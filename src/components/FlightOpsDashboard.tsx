@@ -6,7 +6,7 @@ import { OperationsPanel } from '@/components/panels/OperationsPanel';
 import { useFlightStream } from '@/hooks/useFlightStream';
 
 export function FlightOpsDashboard() {
-  const { alerts, connectionStatus, flightsById } = useFlightStream();
+  const { alerts, connectionStatus, flightsById, serverStatus } = useFlightStream();
   const flights = useMemo(() => Object.values(flightsById), [flightsById]);
   const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
   const selectedFlight = selectedFlightId ? flightsById[selectedFlightId] : flights[0] ?? null;
@@ -24,6 +24,7 @@ export function FlightOpsDashboard() {
         alerts={alerts}
         connectionStatus={connectionStatus}
         flights={flights}
+        serverStatus={serverStatus}
         selectedFlight={selectedFlight}
         onSelectFlight={setSelectedFlightId}
       />

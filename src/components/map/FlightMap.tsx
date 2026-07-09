@@ -5,7 +5,7 @@ import { ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import maplibregl from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatNumber, formatTime } from '@/lib/format';
+import { formatNumber, formatRoute, formatTime } from '@/lib/format';
 import type { FlightState } from '@/types/flight';
 
 type FlightMapProps = {
@@ -65,8 +65,8 @@ export function FlightMap({ flights, selectedFlightId, onSelectFlight }: FlightM
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: mapStyle,
-      center: [-98.58, 39.83],
-      zoom: 3.2,
+      center: [-118.4085, 33.9416],
+      zoom: 7,
       attributionControl: false
     });
 
@@ -94,15 +94,13 @@ export function FlightMap({ flights, selectedFlightId, onSelectFlight }: FlightM
     <div className="map-wrap">
       <div ref={containerRef} className="map-canvas" />
       <div className="map-title">
-        <span>Flight Ops Live Map</span>
+        <span>Live Airspace Pulse</span>
         <small>MapLibre basemap + deck.gl aircraft overlay</small>
       </div>
       {hovered ? (
         <div className="map-hover-card">
           <strong>{hovered.callsign}</strong>
-          <span>
-            {hovered.origin} to {hovered.destination}
-          </span>
+          <span>{formatRoute(hovered.origin, hovered.destination)}</span>
           <span>{formatNumber(hovered.altitudeFt)} ft</span>
           <span>{formatNumber(hovered.groundSpeedKts)} kts</span>
           <span>{formatNumber(hovered.headingDeg)} deg heading</span>

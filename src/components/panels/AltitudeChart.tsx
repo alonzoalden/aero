@@ -19,10 +19,16 @@ export function AltitudeChart({ flight }: AltitudeChartProps) {
       return null;
     }
 
-    const points = flight.track.map((point) => ({
-      date: new Date(point.timestamp),
-      altitudeFt: point.altitudeFt
-    }));
+    const points = flight.track
+      .filter((point) => point.altitudeFt !== null)
+      .map((point) => ({
+        date: new Date(point.timestamp),
+        altitudeFt: point.altitudeFt ?? 0
+      }));
+
+    if (points.length < 2) {
+      return null;
+    }
 
     const timeExtent = extent(points, (point) => point.date);
     const maxAltitude = max(points, (point) => point.altitudeFt) ?? 40000;

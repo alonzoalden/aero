@@ -1,5 +1,5 @@
-import { WebSocketServer } from 'ws';
-import type { FlightAlert, FlightPositionUpdate, FlightStreamMessage } from '../src/types/flight';
+import type { AircraftProvider } from './aircraftProvider';
+import type { FlightAlert, FlightPositionUpdate } from '../src/types/flight';
 
 type AirportCode = 'LAX' | 'SFO' | 'SEA' | 'JFK' | 'ORD' | 'ATL';
 
@@ -18,8 +18,6 @@ type SimFlight = {
   speedFactor: number;
   baseAltitudeFt: number;
 };
-
-const port = Number(process.env.FLIGHT_WS_PORT ?? 8787);
 
 const airports: Record<AirportCode, Airport> = {
   LAX: { code: 'LAX', lat: 33.9416, lon: -118.4085 },
@@ -40,46 +38,29 @@ const flights: SimFlight[] = [
 ];
 
 const alerts: FlightAlert[] = [
-  makeAlert('AAL128', 'warning', 'weather', 'Convective weather near arrival corridor'),
-  makeAlert('DAL983', 'info', 'delay', 'Ground delay program lifted at SEA'),
-  makeAlert('UAL442', 'critical', 'route', 'Route deviation requires dispatcher review')
+  makeAlert('AAL128', 'warning', 'weather', 'Mock weather alert near arrival corridor'),
+  makeAlert('DAL983', 'info', 'delay', 'Mock ground delay update at SEA'),
+  makeAlert('UAL442', 'critical', 'route', 'Mock route deviation for dispatcher review')
 ];
 
-const server = new WebSocketServer({ port });
+export function createMockProvider(): AircraftProvider {
+  return {
+    source: 'mock',
+    async getSnapshot() {
+      for (const flight of flights) {
+        flight.progress += flight.speedFactor;
+        if (flight.progress > 1) {
+          const previousOrigin = flight.origin;
+          flight.origin = flight.destination;
+          flight.destination = previousOrigin;
+          flight.progress = 0;
+        }
+      }
 
-server.on('connection', (socket) => {
-  socket.send(JSON.stringify({ type: 'snapshot', flights: flights.map(toPositionUpdate), alerts } satisfies FlightStreamMessage));
-});
-
-function tick() {
-  for (const flight of flights) {
-    flight.progress += flight.speedFactor;
-    if (flight.progress > 1) {
-      const previousOrigin = flight.origin;
-      flight.origin = flight.destination;
-      flight.destination = previousOrigin;
-      flight.progress = 0;
+      return { flights: flights.map(toPositionUpdate), alerts };
     }
-  }
-
-  const message = JSON.stringify({
-    type: 'position',
-    flight: toPositionUpdate(flights[Math.floor(Math.random() * flights.length)]),
-    alerts
-  } satisfies FlightStreamMessage);
-
-  for (const client of server.clients) {
-    if (client.readyState === client.OPEN) {
-      client.send(message);
-    }
-  }
-
-  setTimeout(tick, 500 + Math.random() * 1500);
+  };
 }
-
-tick();
-
-console.log(`Mock flight WebSocket server listening on ws://localhost:${port}`);
 
 function createFlight(
   callsign: string,
@@ -113,8 +94,11 @@ function toPositionUpdate(flight: SimFlight): FlightPositionUpdate {
     altitudeFt: flight.baseAltitudeFt + Math.round(cruiseWave * 4500),
     groundSpeedKts: 410 + Math.round(cruiseWave * 80),
     headingDeg,
+    verticalRateFpm: Math.round(Math.cos(flight.progress * Math.PI) * 600),
     origin: flight.origin.code,
     destination: flight.destination.code,
+    source: 'mock',
+    lastSeenSeconds: 0,
     timestamp: new Date().toISOString()
   };
 }

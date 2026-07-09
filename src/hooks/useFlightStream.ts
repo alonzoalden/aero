@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { upsertFlight } from '@/lib/flightState';
-import type { FlightAlert, FlightState, FlightStreamMessage } from '@/types/flight';
+import type { FlightAlert, FlightServerStatus, FlightState, FlightStreamMessage } from '@/types/flight';
 
 export type ConnectionStatus = 'connecting' | 'open' | 'closed' | 'error';
 
@@ -11,6 +11,7 @@ const socketUrl = process.env.NEXT_PUBLIC_FLIGHT_WS_URL ?? 'ws://localhost:8787'
 export function useFlightStream() {
   const [flightsById, setFlightsById] = useState<Record<string, FlightState>>({});
   const [alerts, setAlerts] = useState<FlightAlert[]>([]);
+  const [serverStatus, setServerStatus] = useState<FlightServerStatus | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
   const pendingMessages = useRef<FlightStreamMessage[]>([]);
   const frameId = useRef<number | null>(null);
@@ -25,7 +26,8 @@ export function useFlightStream() {
       setFlightsById((current) => {
         let next = current;
         for (const message of batch) {
-          const updates = message.type === 'snapshot' ? message.flights : [message.flight];
+          const updates =
+            message.type === 'position' ? [message.flight] : message.flights;
           for (const update of updates) {
             next = upsertFlight(next, update);
           }
@@ -36,6 +38,11 @@ export function useFlightStream() {
       const latestAlerts = batch.at(-1)?.alerts;
       if (latestAlerts) {
         setAlerts(latestAlerts);
+      }
+
+      const latestStatus = batch.at(-1)?.status;
+      if (latestStatus) {
+        setServerStatus(latestStatus);
       }
     }
 
@@ -58,5 +65,5 @@ export function useFlightStream() {
     };
   }, []);
 
-  return { alerts, connectionStatus, flightsById };
+  return { alerts, connectionStatus, flightsById, serverStatus };
 }
