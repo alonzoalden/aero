@@ -1,7 +1,7 @@
 import type { AircraftProvider } from './aircraftProvider';
 import type { FlightAlert, FlightPositionUpdate } from '../src/types/flight';
 
-type AirportCode = 'LAX' | 'SFO' | 'SEA' | 'JFK' | 'ORD' | 'ATL';
+type AirportCode = 'LAX' | 'SFO' | 'LAS' | 'SAN' | 'PHX' | 'ONT';
 
 type Airport = {
   code: AirportCode;
@@ -20,7 +20,7 @@ type SimFlight = {
   origin: Airport;
   destination: Airport;
   progress: number;
-  speedFactor: number;
+  cruiseGroundSpeedKts: number;
   lowAltitudeFt: number;
   cruiseAltitudeFt: number;
   altitudeWaveFt: number;
@@ -34,19 +34,19 @@ type SimFlight = {
 const airports: Record<AirportCode, Airport> = {
   LAX: { code: 'LAX', lat: 33.9416, lon: -118.4085 },
   SFO: { code: 'SFO', lat: 37.6213, lon: -122.379 },
-  SEA: { code: 'SEA', lat: 47.4502, lon: -122.3088 },
-  JFK: { code: 'JFK', lat: 40.6413, lon: -73.7781 },
-  ORD: { code: 'ORD', lat: 41.9742, lon: -87.9073 },
-  ATL: { code: 'ATL', lat: 33.6407, lon: -84.4277 }
+  LAS: { code: 'LAS', lat: 36.084, lon: -115.1537 },
+  SAN: { code: 'SAN', lat: 32.7338, lon: -117.1933 },
+  PHX: { code: 'PHX', lat: 33.4342, lon: -112.0116 },
+  ONT: { code: 'ONT', lat: 34.0559, lon: -117.6012 }
 };
 
 const flights: SimFlight[] = [
-  createFlight('AAL128', airports.LAX, airports.JFK, 0.05, 0.008),
-  createFlight('UAL442', airports.SFO, airports.ORD, 0.26, 0.01),
-  createFlight('DAL983', airports.ATL, airports.SEA, 0.54, 0.007),
-  createFlight('ASA611', airports.SEA, airports.SFO, 0.38, 0.014),
-  createFlight('JBU204', airports.JFK, airports.LAX, 0.73, 0.009),
-  createFlight('SWA271', airports.ORD, airports.ATL, 0.18, 0.012)
+  createFlight('AAL128', airports.LAX, airports.SFO, 0.05, 430),
+  createFlight('UAL442', airports.SFO, airports.LAX, 0.26, 420),
+  createFlight('DAL983', airports.LAX, airports.LAS, 0.54, 360),
+  createFlight('ASA611', airports.SAN, airports.SFO, 0.38, 390),
+  createFlight('JBU204', airports.PHX, airports.LAX, 0.73, 410),
+  createFlight('SWA271', airports.ONT, airports.LAS, 0.18, 310)
 ];
 
 const alerts: FlightAlert[] = [
@@ -60,7 +60,7 @@ export function createMockProvider(): AircraftProvider {
     source: 'mock',
     async getSnapshot() {
       for (const flight of flights) {
-        flight.progress += flight.speedFactor;
+        flight.progress += calculateMockProgressStep(flight);
         if (flight.progress > 1) {
           const previousOrigin = flight.origin;
           flight.origin = flight.destination;
@@ -79,7 +79,7 @@ function createFlight(
   origin: Airport,
   destination: Airport,
   progress: number,
-  speedFactor: number
+  cruiseGroundSpeedKts: number
 ): SimFlight {
   return {
     flightId: callsign.toLowerCase(),
@@ -87,7 +87,7 @@ function createFlight(
     origin,
     destination,
     progress,
-    speedFactor,
+    cruiseGroundSpeedKts,
     lowAltitudeFt: 2500 + deterministicValue(callsign, 4500),
     cruiseAltitudeFt: 27000 + deterministicValue(`${callsign}-cruise`, 12000),
     altitudeWaveFt: 3200 + deterministicValue(`${callsign}-wave`, 3800),
@@ -122,8 +122,9 @@ function toPositionUpdate(flight: SimFlight): FlightPositionUpdate {
 }
 
 function calculateMockHeadingDeg(flight: SimFlight) {
-  const previousProgress = Math.max(0, flight.progress - flight.speedFactor * 0.65);
-  const nextProgress = Math.min(1, flight.progress + flight.speedFactor * 0.65);
+  const progressStep = calculateMockProgressStep(flight);
+  const previousProgress = Math.max(0, flight.progress - progressStep * 2);
+  const nextProgress = Math.min(1, flight.progress + progressStep * 2);
   const previousPosition = calculateMockPosition(flight, previousProgress);
   const nextPosition = calculateMockPosition(flight, nextProgress);
   const correctionTurn = Math.sin(flight.progress * Math.PI * 9 + flight.headingPhase * 0.7) * 3;
@@ -155,15 +156,54 @@ function calculateMockPosition(flight: SimFlight, progress: number): GeoPoint {
 
 function calculateAltitudeProfile(flight: SimFlight) {
   const altitudeFt = calculateMockAltitudeFt(flight, flight.progress);
-  const nextProgress = Math.min(1, flight.progress + flight.speedFactor);
+  const nextProgress = Math.min(1, flight.progress + calculateMockProgressStep(flight));
   const nextAltitudeFt = calculateMockAltitudeFt(flight, nextProgress);
-  const cruiseShape = getCruiseShape(flight.progress);
 
   return {
     altitudeFt,
-    groundSpeedKts: 250 + Math.round(cruiseShape * 245),
+    groundSpeedKts: calculateMockGroundSpeedKts(flight, flight.progress),
     verticalRateFpm: Math.round((nextAltitudeFt - altitudeFt) * 60)
   };
+}
+
+function calculateMockProgressStep(
+  flight: Pick<SimFlight, 'origin' | 'destination' | 'progress' | 'cruiseGroundSpeedKts' | 'headingPhase'>
+) {
+  const routeDistanceNm = calculateMockRouteDistanceNm(flight.origin, flight.destination);
+  const groundSpeedKts = calculateMockGroundSpeedKts(flight, flight.progress);
+
+  return calculateMockProgressStepFromSpeed(routeDistanceNm, groundSpeedKts);
+}
+
+export function calculateMockProgressStepFromSpeed(routeDistanceNm: number, groundSpeedKts: number) {
+  const nauticalMilesPerSecond = groundSpeedKts / 3600;
+
+  return nauticalMilesPerSecond / Math.max(1, routeDistanceNm);
+}
+
+export function calculateMockRouteDistanceNm(origin: GeoPoint, destination: GeoPoint): number {
+  const earthRadiusNm = 3440.065;
+  const lat1 = toRadians(origin.lat);
+  const lat2 = toRadians(destination.lat);
+  const deltaLat = toRadians(destination.lat - origin.lat);
+  const deltaLon = toRadians(destination.lon - origin.lon);
+  const haversine =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+
+  return 2 * earthRadiusNm * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+function calculateMockGroundSpeedKts(
+  flight: Pick<SimFlight, 'progress' | 'cruiseGroundSpeedKts' | 'headingPhase'>,
+  progress: number
+) {
+  const cruiseShape = getCruiseShape(progress);
+  const routeEndDamping = Math.max(0.5, Math.sin(progress * Math.PI));
+  const speedWave = Math.sin(progress * Math.PI * 4 + flight.headingPhase) * 18;
+  const speedKts = 165 + (flight.cruiseGroundSpeedKts - 165) * cruiseShape * routeEndDamping + speedWave;
+
+  return Math.max(95, Math.round(speedKts));
 }
 
 function calculateMockAltitudeFt(flight: SimFlight, progress: number) {

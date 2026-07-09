@@ -129,7 +129,7 @@ Future 3D tickets:
 
 ## Real vs Simulated
 
-- `FLIGHT_DATA_SOURCE=mock` starts in the default smooth demo mode. Mock uses a small, predictable local sample with hardcoded airport pairs and mock alerts, and can be selected at runtime from the Operations panel.
+- `FLIGHT_DATA_SOURCE=mock` starts in the default smooth demo mode. Mock uses a small, predictable West Coast/Southwest sample with distance-based aircraft movement, hardcoded airport pairs, and mock alerts, and can be selected at runtime from the Operations panel.
 - `FLIGHT_DATA_SOURCE=airplanes-live` starts on real public ADS-B-derived data from `https://api.airplanes.live/v2/point/33.9416/-118.4085/100`. It is intentionally conservative and REST-polled every 10 seconds by default, and can be selected at runtime from the Operations panel.
 - `FLIGHT_DATA_SOURCE=demo-ops` is synthetic operational demo data around Southern California/LAX. It simulates faster WebSocket updates, route context, departures, arrivals, regional traffic, cargo callsigns, holding patterns, low-altitude tracks, and demo-only alerts.
 - `FLIGHT_DATA_SOURCE=stress` is local-only scale/load simulation around Southern California. It remains startup-only, is not ADS-B data, and is meant to demonstrate backend coalescing and frontend rendering behavior.
