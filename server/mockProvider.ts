@@ -9,6 +9,11 @@ type Airport = {
   lon: number;
 };
 
+type GeoPoint = {
+  lat: number;
+  lon: number;
+};
+
 type SimFlight = {
   flightId: string;
   callsign: string;
@@ -21,6 +26,9 @@ type SimFlight = {
   altitudeWaveFt: number;
   altitudePhase: number;
   altitudeStepFt: number;
+  headingWaveDeg: number;
+  headingPhase: number;
+  lateralWaveNm: number;
 };
 
 const airports: Record<AirportCode, Airport> = {
@@ -84,21 +92,23 @@ function createFlight(
     cruiseAltitudeFt: 27000 + deterministicValue(`${callsign}-cruise`, 12000),
     altitudeWaveFt: 3200 + deterministicValue(`${callsign}-wave`, 3800),
     altitudePhase: deterministicValue(`${callsign}-phase`, 360) * (Math.PI / 180),
-    altitudeStepFt: 1200 + deterministicValue(`${callsign}-step`, 2600)
+    altitudeStepFt: 1200 + deterministicValue(`${callsign}-step`, 2600),
+    headingWaveDeg: 8 + deterministicValue(`${callsign}-heading-wave`, 22),
+    headingPhase: deterministicValue(`${callsign}-heading-phase`, 360) * (Math.PI / 180),
+    lateralWaveNm: 12 + deterministicValue(`${callsign}-lateral-wave`, 26)
   };
 }
 
 function toPositionUpdate(flight: SimFlight): FlightPositionUpdate {
-  const lat = interpolate(flight.origin.lat, flight.destination.lat, flight.progress);
-  const lon = interpolate(flight.origin.lon, flight.destination.lon, flight.progress);
+  const position = calculateMockPosition(flight, flight.progress);
   const altitudeProfile = calculateAltitudeProfile(flight);
-  const headingDeg = bearing(flight.origin, flight.destination);
+  const headingDeg = calculateMockHeadingDeg(flight);
 
   return {
     flightId: flight.flightId,
     callsign: flight.callsign,
-    lat,
-    lon,
+    lat: position.lat,
+    lon: position.lon,
     altitudeFt: altitudeProfile.altitudeFt,
     groundSpeedKts: altitudeProfile.groundSpeedKts,
     headingDeg,
@@ -108,6 +118,38 @@ function toPositionUpdate(flight: SimFlight): FlightPositionUpdate {
     source: 'mock',
     lastSeenSeconds: 0,
     timestamp: new Date().toISOString()
+  };
+}
+
+function calculateMockHeadingDeg(flight: SimFlight) {
+  const previousProgress = Math.max(0, flight.progress - flight.speedFactor * 0.65);
+  const nextProgress = Math.min(1, flight.progress + flight.speedFactor * 0.65);
+  const previousPosition = calculateMockPosition(flight, previousProgress);
+  const nextPosition = calculateMockPosition(flight, nextProgress);
+  const correctionTurn = Math.sin(flight.progress * Math.PI * 9 + flight.headingPhase * 0.7) * 3;
+
+  return Math.round((bearing(previousPosition, nextPosition) + correctionTurn + 360) % 360);
+}
+
+function calculateMockPosition(flight: SimFlight, progress: number): GeoPoint {
+  const routePosition = {
+    lat: interpolate(flight.origin.lat, flight.destination.lat, progress),
+    lon: interpolate(flight.origin.lon, flight.destination.lon, progress)
+  };
+  const routeHeading = bearing(flight.origin, flight.destination);
+  const routeHeadingRad = toRadians(routeHeading);
+  const midpointLatRad = toRadians(routePosition.lat);
+  const routeEnvelope = Math.sin(progress * Math.PI);
+  const broadTurn = Math.sin(progress * Math.PI * 2 + flight.headingPhase) * flight.headingWaveDeg;
+  const localTurn = Math.sin(progress * Math.PI * 6 + flight.headingPhase * 0.5) * flight.headingWaveDeg * 0.24;
+  const lateralOffsetNm = routeEnvelope * flight.lateralWaveNm * ((broadTurn + localTurn) / flight.headingWaveDeg);
+  const perpendicularHeadingRad = routeHeadingRad + Math.PI / 2;
+  const latOffset = (Math.cos(perpendicularHeadingRad) * lateralOffsetNm) / 60;
+  const lonOffset = (Math.sin(perpendicularHeadingRad) * lateralOffsetNm) / (60 * Math.max(0.2, Math.cos(midpointLatRad)));
+
+  return {
+    lat: routePosition.lat + latOffset,
+    lon: routePosition.lon + lonOffset
   };
 }
 
@@ -149,7 +191,7 @@ function interpolate(start: number, end: number, progress: number): number {
   return start + (end - start) * progress;
 }
 
-function bearing(origin: Airport, destination: Airport): number {
+function bearing(origin: GeoPoint, destination: GeoPoint): number {
   const lat1 = toRadians(origin.lat);
   const lat2 = toRadians(destination.lat);
   const deltaLon = toRadians(destination.lon - origin.lon);

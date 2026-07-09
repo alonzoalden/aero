@@ -465,6 +465,10 @@ button {
   font-size: 13px;
 }
 
+.chart-heading-secondary {
+  margin-top: 14px;
+}
+
 .altitude-chart {
   display: block;
   width: 100%;
@@ -485,6 +489,10 @@ button {
   stroke: var(--accent);
   stroke-linecap: round;
   stroke-width: 2.5;
+}
+
+.altitude-chart .heading-path {
+  stroke: var(--selected);
 }
 
 .chart-empty {

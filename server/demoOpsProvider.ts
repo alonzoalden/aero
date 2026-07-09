@@ -235,23 +235,21 @@ export function createDemoOpsProvider(aircraftCount: number): DemoOpsProvider {
     const route = routes[flight.routeIndex];
     const totalDistance = getRouteDistanceNm(route.waypoints);
     const progress = clamp(flight.distanceNm / totalDistance, 0, 1);
-    const routePoint = interpolateRoute(route.waypoints, progress);
-    const nextProgress = clamp(progress + 0.0025, 0, 1);
-    const nextPoint = interpolateRoute(route.waypoints, nextProgress);
-    const noise = getPositionNoise(flight.noiseSeed, seconds, route.category);
+    const displayPoint = getDisplayPoint(flight, route, progress, seconds);
     const profile = getAltitudeProfile(route.category, progress, route);
     const altitudeFt = Math.round(profile.altitudeFt);
+    const headingDeg = calculateDisplayHeading(flight, route, totalDistance, progress, seconds);
     const lastSeenSeconds =
       flight.stalePulse && Math.floor(seconds / 18) % 3 === 1 ? 6 + Math.round((seconds % 4) * 2) : 0;
 
     return {
       flightId: flight.flightId,
       callsign: flight.callsign,
-      lat: roundCoordinate(routePoint.lat + noise.lat),
-      lon: roundCoordinate(routePoint.lon + noise.lon),
+      lat: roundCoordinate(displayPoint.lat),
+      lon: roundCoordinate(displayPoint.lon),
       altitudeFt,
       groundSpeedKts: Math.round(getPhaseSpeedKts(route.category, progress, route.speedKts) * flight.speedBias),
-      headingDeg: Math.round(calculateBearing(routePoint, nextPoint)),
+      headingDeg,
       verticalRateFpm: Math.round(((altitudeFt - flight.previousAltitudeFt) / lastTickSeconds) * 60),
       origin: route.origin,
       destination: route.destination,
@@ -260,6 +258,32 @@ export function createDemoOpsProvider(aircraftCount: number): DemoOpsProvider {
       timestamp
     };
   }
+}
+
+function calculateDisplayHeading(
+  flight: DemoAircraft,
+  route: DemoRoute,
+  totalDistance: number,
+  progress: number,
+  seconds: number
+) {
+  const progressStep = Math.max(0.0015, ((route.speedKts * flight.speedBias * 1.5) / 3600) / totalDistance);
+  const previousProgress = clamp(progress - progressStep, 0, 1);
+  const nextProgress = clamp(progress + progressStep, 0, 1);
+  const previousPoint = getDisplayPoint(flight, route, previousProgress, seconds - 0.75);
+  const nextPoint = getDisplayPoint(flight, route, nextProgress, seconds + 0.75);
+
+  return Math.round(calculateBearing(previousPoint, nextPoint));
+}
+
+function getDisplayPoint(flight: DemoAircraft, route: DemoRoute, progress: number, seconds: number): Waypoint {
+  const routePoint = interpolateRoute(route.waypoints, progress);
+  const noise = getPositionNoise(flight.noiseSeed, seconds, route.category);
+
+  return {
+    lat: routePoint.lat + noise.lat,
+    lon: routePoint.lon + noise.lon
+  };
 }
 
 export function interpolateRoute(waypoints: Waypoint[], progress: number): Waypoint {

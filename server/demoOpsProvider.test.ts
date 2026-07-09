@@ -62,3 +62,17 @@ test('demo provider emits valid demo-ops flight updates', () => {
   assert.ok(updates.every((flight) => Number.isFinite(flight.groundSpeedKts)));
   assert.ok(updates.every((flight) => Number.isFinite(flight.headingDeg)));
 });
+
+test('demo provider updates heading for displayed low-altitude tracks', () => {
+  const provider = createDemoOpsProvider(30);
+  const headings = new Set<number>();
+
+  for (let index = 0; index < 12; index += 1) {
+    provider.tick(1 / 3);
+    const helicopterLikeTrack = provider.getSnapshot().find((flight) => flight.callsign.startsWith('HLC'));
+    assert.ok(helicopterLikeTrack);
+    headings.add(helicopterLikeTrack.headingDeg ?? -1);
+  }
+
+  assert.ok(headings.size > 1);
+});

@@ -1,6 +1,7 @@
 'use client';
 
 import { AltitudeChart } from '@/components/panels/AltitudeChart';
+import { getDisplayHeadingDeg } from '@/lib/flightHeading';
 import { formatNumber, formatRoute, formatTime } from '@/lib/format';
 import type { ConnectionStatus, FrontendStreamMetrics } from '@/hooks/useFlightStream';
 import type { AircraftVisualMode, FlightAlert, FlightServerStatus, FlightState } from '@/types/flight';
@@ -33,6 +34,7 @@ export function OperationsPanel({
   const visibleFlights = isStressMode ? flights.slice(0, 80) : flights;
   const hiddenFlightCount = Math.max(0, flights.length - visibleFlights.length);
   const scaleMetrics = serverStatus?.scaleMetrics;
+  const selectedHeadingDeg = selectedFlight ? getDisplayHeadingDeg(selectedFlight) : null;
 
   return (
     <aside className="ops-panel">
@@ -141,7 +143,7 @@ export function OperationsPanel({
             <span>Speed</span>
             <strong>{formatNumber(selectedFlight.groundSpeedKts)} kts</strong>
             <span>Heading</span>
-            <strong>{formatNumber(selectedFlight.headingDeg)} deg</strong>
+            <strong>{formatNumber(selectedHeadingDeg)} deg</strong>
             <span>Vertical rate</span>
             <strong>{formatNumber(selectedFlight.verticalRateFpm)} fpm</strong>
             <span>Source</span>

@@ -6,6 +6,7 @@ import { MapboxOverlay } from '@deck.gl/mapbox';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers';
 import maplibregl, { type MapLibreEvent, type StyleSpecification } from 'maplibre-gl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getDisplayHeadingDeg } from '@/lib/flightHeading';
 import { formatNumber, formatRoute, formatTime } from '@/lib/format';
 import type { CameraFraming, CameraMode, CameraSettings } from '@/types/camera';
 import type { AircraftVisualMode, FlightState } from '@/types/flight';
@@ -38,6 +39,7 @@ const chaseCameraPitch = 72;
 const chaseCameraInitialZoom = 15;
 const chaseCameraEaseMs = 520;
 const followCameraEaseMs = 650;
+const aircraftTransitionMs = 850;
 const followCameraPitch = 42;
 const cartoAttribution =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
@@ -125,17 +127,14 @@ const basemapStyles: BasemapStyle[] = [
 
 const defaultBasemapId: BasemapStyle['id'] = 'voyager';
 
-function hasHeading(flight: FlightState): flight is FlightState & { headingDeg: number } {
-  return flight.headingDeg !== null && flight.headingDeg !== undefined;
-}
-
 function getCameraOffset(flight: FlightState, framing: CameraFraming): [number, number] {
   if (framing === 'lowerThird') {
     return [0, 140];
   }
 
-  if (framing === 'lookAhead' && hasHeading(flight)) {
-    const headingRad = (flight.headingDeg * Math.PI) / 180;
+  const displayHeading = getDisplayHeadingDeg(flight);
+  if (framing === 'lookAhead' && displayHeading !== null) {
+    const headingRad = (displayHeading * Math.PI) / 180;
     const distancePx = 110;
 
     return [-Math.sin(headingRad) * distancePx, Math.cos(headingRad) * distancePx];
@@ -164,7 +163,7 @@ function getNearestBearingEquivalent(currentBearing: number, targetBearing: numb
 
 function getChaseCameraBearing(flight: FlightState) {
   // Match MapLibre bearing to the compass heading so the corrected aircraft nose renders screen-up.
-  return hasHeading(flight) ? normalizeBearing(flight.headingDeg) : 0;
+  return normalizeBearing(getDisplayHeadingDeg(flight) ?? 0);
 }
 
 function getReadableAltitudeMeters(flight: FlightState) {
@@ -178,11 +177,15 @@ function getReadableAltitudeMeters(flight: FlightState) {
 }
 
 function getAircraftOrientation(flight: FlightState): [number, number, number] {
-  const heading = hasHeading(flight) ? flight.headingDeg : 0;
+  const heading = getDisplayHeadingDeg(flight) ?? 0;
 
   // headingDeg is a compass bearing: 0=north, 90=east. deck.gl yaw is positive counter-clockwise
   // from the model's local +Y nose axis, so invert heading before applying any asset-specific offset.
   return [0, -heading + AIRCRAFT_MODEL_YAW_OFFSET_DEG, 0];
+}
+
+function smoothTransitionEasing(t: number) {
+  return t * t * (3 - 2 * t);
 }
 
 export function FlightMap({
@@ -259,6 +262,27 @@ export function FlightMap({
 
   const layers = useMemo(
     () => {
+      const positionTransitions = isDense
+        ? undefined
+        : {
+            getPosition: {
+              duration: aircraftTransitionMs,
+              easing: smoothTransitionEasing
+            }
+          };
+      const modelTransitions =
+        modelFlights.length > 250
+          ? undefined
+          : {
+              getPosition: {
+                duration: aircraftTransitionMs,
+                easing: smoothTransitionEasing
+              },
+              getOrientation: {
+                duration: aircraftTransitionMs,
+                easing: smoothTransitionEasing
+              }
+            };
       const modelOnlyIsActive = effectiveVisualMode === 'models' && modelLayerActiveCount > 0;
       const dotFlights =
         effectiveVisualMode === 'hybrid' && selectedFlightId
@@ -275,6 +299,7 @@ export function FlightMap({
             pickable: true,
             stroked: true,
             getPosition: (flight) => [flight.lon, flight.lat],
+            transitions: positionTransitions,
             getRadius: (flight) =>
               flight.flightId === selectedFlightId && effectiveVisualMode !== 'hybrid'
                 ? 70000
@@ -309,6 +334,7 @@ export function FlightMap({
               stroked: true,
               filled: true,
               getPosition: (flight) => [flight.lon, flight.lat],
+              transitions: positionTransitions,
               getRadius: 95000,
               radiusMinPixels: 18,
               radiusMaxPixels: 34,
@@ -332,6 +358,7 @@ export function FlightMap({
               _lighting: 'pbr',
               getPosition: (flight) => [flight.lon, flight.lat, getReadableAltitudeMeters(flight)],
               getOrientation: getAircraftOrientation,
+              transitions: modelTransitions,
               getScale: (flight) => {
                 const scale = flight.flightId === selectedFlightId ? selectedAircraftModelScale : aircraftModelScale;
 
@@ -358,6 +385,7 @@ export function FlightMap({
         id: 'aircraft-labels',
         data: labelFlights,
         getPosition: (flight) => [flight.lon, flight.lat],
+        transitions: positionTransitions,
         getText: (flight) => flight.callsign,
         getSize: 12,
         getPixelOffset: [0, -22],
@@ -484,7 +512,7 @@ export function FlightMap({
         ? Math.min(activeMap.getMaxZoom(), chaseCameraInitialZoom)
         : activeMap.getZoom();
 
-    if (activeMode === 'chase' && hasHeading(activeFlight)) {
+    if (activeMode === 'chase' && getDisplayHeadingDeg(activeFlight) !== null) {
       bearing = getNearestBearingEquivalent(bearing, getChaseCameraBearing(activeFlight));
     }
 
@@ -609,7 +637,7 @@ export function FlightMap({
           <span>{formatRoute(hovered.origin, hovered.destination)}</span>
           <span>{formatNumber(hovered.altitudeFt)} ft</span>
           <span>{formatNumber(hovered.groundSpeedKts)} kts</span>
-          <span>{formatNumber(hovered.headingDeg)} deg heading</span>
+          <span>{formatNumber(getDisplayHeadingDeg(hovered))} deg heading</span>
           <span>{formatTime(hovered.timestamp)}</span>
         </div>
       ) : null}
