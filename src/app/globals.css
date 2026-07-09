@@ -101,7 +101,7 @@ button {
   right: 16px;
   display: grid;
   gap: 8px;
-  width: 250px;
+  width: 286px;
   padding: 10px;
 }
 
@@ -126,6 +126,10 @@ button {
   gap: 6px;
 }
 
+.camera-buttons.two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
 .camera-button {
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -136,9 +140,38 @@ button {
   cursor: pointer;
 }
 
+.camera-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .camera-button.active {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.camera-subsection {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid rgb(148 163 184 / 16%);
+  padding-top: 8px;
+}
+
+.camera-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.camera-toggle.disabled {
+  color: var(--muted);
+}
+
+.camera-label {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .camera-note {
