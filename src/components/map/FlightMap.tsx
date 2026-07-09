@@ -4,8 +4,8 @@ import type { PickingInfo } from '@deck.gl/core';
 import { ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers';
-import maplibregl from 'maplibre-gl';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import maplibregl, { type MapLibreEvent, type StyleSpecification } from 'maplibre-gl';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatNumber, formatRoute, formatTime } from '@/lib/format';
 import type { CameraFraming, CameraMode, CameraSettings } from '@/types/camera';
 import type { AircraftVisualMode, FlightState } from '@/types/flight';
@@ -21,16 +21,109 @@ type FlightMapProps = {
   onSelectFlight: (flightId: string) => void;
 };
 
-const mapStyle = 'https://demotiles.maplibre.org/style.json';
+type CameraGestureEvent = MapLibreEvent<MouseEvent | TouchEvent | undefined>;
+
 const aircraftModelUrl = '/models/airplane.glb';
 const feetToMeters = 0.3048;
 const altitudeVisualScale = 0.02;
 const aircraftModelScale = 0.5;
-const selectedAircraftModelScale = 0.85;
-const aircraftModelMinPixels = 7;
-const aircraftModelMaxPixels = 24;
+const selectedAircraftModelScale = 1;
+const aircraftModelMinPixels = 8;
+const aircraftModelMaxPixels = 42;
 const AIRCRAFT_MODEL_YAW_OFFSET_DEG = 0;
-const minCameraUpdateMs = 700;
+const followCameraUpdateMs = 700;
+const chaseCameraUpdateMs = 180;
+const chaseCameraOffset: [number, number] = [0, 190];
+const chaseCameraPitch = 72;
+const chaseCameraMinZoom = 9.5;
+const chaseCameraEaseMs = 520;
+const followCameraEaseMs = 650;
+const followCameraPitch = 42;
+const cartoAttribution =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const osmAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+type BasemapStyle = {
+  id: 'voyager' | 'positron' | 'dark' | 'osm' | 'demo';
+  label: string;
+  description: string;
+  createStyle: () => string | StyleSpecification;
+};
+
+function createRasterBasemapStyle(name: string, tileUrl: string, attribution: string): StyleSpecification {
+  return {
+    version: 8,
+    name,
+    sources: {
+      rasterBasemap: {
+        type: 'raster',
+        tiles: [tileUrl],
+        tileSize: 256,
+        attribution
+      }
+    },
+    layers: [
+      {
+        id: 'raster-basemap',
+        type: 'raster',
+        source: 'rasterBasemap',
+        minzoom: 0,
+        maxzoom: 19
+      }
+    ]
+  };
+}
+
+const basemapStyles: BasemapStyle[] = [
+  {
+    id: 'voyager',
+    label: 'Detail',
+    description: 'CARTO Voyager labels roads, places, borders, and state context.',
+    createStyle: () =>
+      createRasterBasemapStyle(
+        'CARTO Voyager',
+        'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        cartoAttribution
+      )
+  },
+  {
+    id: 'positron',
+    label: 'Light',
+    description: 'A quieter labeled basemap for reading dense aircraft overlays.',
+    createStyle: () =>
+      createRasterBasemapStyle(
+        'CARTO Positron',
+        'https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png',
+        cartoAttribution
+      )
+  },
+  {
+    id: 'dark',
+    label: 'Dark',
+    description: 'A dark labeled basemap that matches the operations panel.',
+    createStyle: () =>
+      createRasterBasemapStyle(
+        'CARTO Dark Matter',
+        'https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png',
+        cartoAttribution
+      )
+  },
+  {
+    id: 'osm',
+    label: 'OSM',
+    description: 'OpenStreetMap standard tiles with familiar road and place detail.',
+    createStyle: () =>
+      createRasterBasemapStyle('OpenStreetMap Standard', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', osmAttribution)
+  },
+  {
+    id: 'demo',
+    label: 'Demo',
+    description: 'The original MapLibre demo vector style.',
+    createStyle: () => 'https://demotiles.maplibre.org/style.json'
+  }
+];
+
+const defaultBasemapId: BasemapStyle['id'] = 'voyager';
 
 function hasHeading(flight: FlightState): flight is FlightState & { headingDeg: number } {
   return flight.headingDeg !== null && flight.headingDeg !== undefined;
@@ -51,6 +144,29 @@ function getCameraOffset(flight: FlightState, framing: CameraFraming): [number, 
   return [0, 0];
 }
 
+function getActiveCameraOffset(flight: FlightState, mode: CameraMode, framing: CameraFraming): [number, number] {
+  if (mode === 'chase') {
+    return chaseCameraOffset;
+  }
+
+  return getCameraOffset(flight, framing);
+}
+
+function normalizeBearing(bearing: number) {
+  return ((bearing % 360) + 360) % 360;
+}
+
+function getNearestBearingEquivalent(currentBearing: number, targetBearing: number) {
+  const delta = ((targetBearing - currentBearing + 540) % 360) - 180;
+
+  return currentBearing + delta;
+}
+
+function getChaseCameraBearing(flight: FlightState) {
+  // Match MapLibre bearing to the compass heading so the corrected aircraft nose renders screen-up.
+  return hasHeading(flight) ? normalizeBearing(flight.headingDeg) : 0;
+}
+
 function getReadableAltitudeMeters(flight: FlightState) {
   if (flight.altitudeFt === null || flight.altitudeFt === undefined) {
     return 80;
@@ -64,8 +180,9 @@ function getReadableAltitudeMeters(flight: FlightState) {
 function getAircraftOrientation(flight: FlightState): [number, number, number] {
   const heading = hasHeading(flight) ? flight.headingDeg : 0;
 
-  // The generated GLB points along its local +Y axis. Keep this yaw offset named so a future asset swap can be tuned.
-  return [0, heading + AIRCRAFT_MODEL_YAW_OFFSET_DEG, 0];
+  // headingDeg is a compass bearing: 0=north, 90=east. deck.gl yaw is positive counter-clockwise
+  // from the model's local +Y nose axis, so invert heading before applying any asset-specific offset.
+  return [0, -heading + AIRCRAFT_MODEL_YAW_OFFSET_DEG, 0];
 }
 
 export function FlightMap({
@@ -86,10 +203,46 @@ export function FlightMap({
   const cameraModeRef = useRef(cameraMode);
   const cameraSettingsRef = useRef(cameraSettings);
   const selectedFlightRef = useRef(selectedFlight);
+  const onCameraModeChangeRef = useRef(onCameraModeChange);
+  const basemapStyleInitializedRef = useRef(false);
   const [hovered, setHovered] = useState<FlightState | null>(null);
+  const [basemapId, setBasemapId] = useState<BasemapStyle['id']>(defaultBasemapId);
   const isDense = flights.length > 250;
+  const selectedBasemap = basemapStyles.find((style) => style.id === basemapId) ?? basemapStyles[0];
+  const aircraftLabelStyle = useMemo(
+    () =>
+      basemapId === 'dark'
+        ? {
+            backgroundColor: [248, 250, 252, 232] as [number, number, number, number],
+            color: [15, 23, 42, 245] as [number, number, number, number],
+            useBackground: true
+          }
+        : {
+            backgroundColor: [248, 250, 252, 0] as [number, number, number, number],
+            color: [15, 23, 42, 245] as [number, number, number, number],
+            useBackground: false
+          },
+    [basemapId]
+  );
   const effectiveVisualMode = aircraftVisualMode;
   const cameraNeedsSelection = cameraMode !== 'free' && !selectedFlight;
+  const releaseCameraToFree = useCallback((event?: CameraGestureEvent) => {
+    if (!event?.originalEvent) {
+      return;
+    }
+
+    if (cameraModeRef.current === 'free') {
+      return;
+    }
+
+    if (cameraTimeoutRef.current) {
+      window.clearTimeout(cameraTimeoutRef.current);
+      cameraTimeoutRef.current = null;
+    }
+
+    cameraModeRef.current = 'free';
+    onCameraModeChangeRef.current('free');
+  }, []);
   const modelFlights = useMemo(() => {
     if (effectiveVisualMode === 'models') {
       return flights;
@@ -106,7 +259,12 @@ export function FlightMap({
   const layers = useMemo(
     () => {
       const modelOnlyIsActive = effectiveVisualMode === 'models' && modelLayerActiveCount > 0;
-      const dotFlights = modelOnlyIsActive ? [] : flights;
+      const dotFlights =
+        effectiveVisualMode === 'hybrid' && selectedFlightId
+          ? flights.filter((flight) => flight.flightId !== selectedFlightId)
+          : modelOnlyIsActive
+            ? []
+            : flights;
       const dotLayerIsVisible = dotFlights.length > 0;
 
       const aircraftDotLayer = dotLayerIsVisible
@@ -141,6 +299,24 @@ export function FlightMap({
           })
         : null;
 
+      const selectedAircraftHaloLayer =
+        effectiveVisualMode === 'hybrid' && selectedFlight
+          ? new ScatterplotLayer<FlightState>({
+              id: 'selected-aircraft-halo',
+              data: [selectedFlight],
+              pickable: false,
+              stroked: true,
+              filled: true,
+              getPosition: (flight) => [flight.lon, flight.lat],
+              getRadius: 95000,
+              radiusMinPixels: 18,
+              radiusMaxPixels: 34,
+              getFillColor: [250, 204, 21, 46],
+              getLineColor: [250, 204, 21, 230],
+              lineWidthMinPixels: 2
+            })
+          : null;
+
       const aircraftModelLayer =
         modelFlights.length > 0
           ? new ScenegraphLayer<FlightState>({
@@ -150,9 +326,9 @@ export function FlightMap({
               pickable: true,
               // Keep the GLB in model units; ScenegraphLayer pixel clamps own screen readability.
               sizeScale: 1,
-              sizeMinPixels: aircraftModelMinPixels,
-              sizeMaxPixels: aircraftModelMaxPixels,
-              _lighting: 'flat',
+              sizeMinPixels: effectiveVisualMode === 'hybrid' ? 18 : aircraftModelMinPixels,
+              sizeMaxPixels: effectiveVisualMode === 'hybrid' ? 58 : aircraftModelMaxPixels,
+              _lighting: 'pbr',
               getPosition: (flight) => [flight.lon, flight.lat, getReadableAltitudeMeters(flight)],
               getOrientation: getAircraftOrientation,
               getScale: (flight) => {
@@ -160,8 +336,7 @@ export function FlightMap({
 
                 return [scale, scale, scale];
               },
-              getColor: (flight) =>
-                flight.flightId === selectedFlightId ? [250, 204, 21, 255] : [125, 211, 252, 245],
+              getColor: [255, 255, 255, 250],
               onError: (error) => {
                 console.warn('Aircraft model layer failed to load.', error);
                 return true;
@@ -185,17 +360,22 @@ export function FlightMap({
         getText: (flight) => flight.callsign,
         getSize: 12,
         getPixelOffset: [0, -22],
-        getColor: [226, 232, 240, 240]
+        background: aircraftLabelStyle.useBackground,
+        backgroundPadding: [5, 3],
+        getBackgroundColor: aircraftLabelStyle.backgroundColor,
+        getColor: aircraftLabelStyle.color
       });
 
       function withModelLayer(
         baseLayers: Array<ScatterplotLayer<FlightState> | ScenegraphLayer<FlightState> | TextLayer<FlightState>>
       ) {
+        const layersWithHalo = selectedAircraftHaloLayer ? [...baseLayers, selectedAircraftHaloLayer] : baseLayers;
+
         if (aircraftModelLayer) {
-          return [...baseLayers, aircraftModelLayer, aircraftLabelLayer];
+          return [...layersWithHalo, aircraftModelLayer, aircraftLabelLayer];
         }
 
-        return [...baseLayers, aircraftLabelLayer];
+        return [...layersWithHalo, aircraftLabelLayer];
       }
 
       if (effectiveVisualMode === 'models') {
@@ -221,6 +401,7 @@ export function FlightMap({
       modelFlights,
       modelLayerActiveCount,
       onSelectFlight,
+      aircraftLabelStyle,
       selectedFlight,
       selectedFlightId
     ]
@@ -233,13 +414,15 @@ export function FlightMap({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: mapStyle,
+      style: selectedBasemap.createStyle(),
       center: [-118.4085, 33.9416],
       zoom: 7,
       attributionControl: false
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
+    map.on('dragstart', releaseCameraToFree);
+    map.on('rotatestart', releaseCameraToFree);
 
     const overlay = new MapboxOverlay({ interleaved: false, layers: [] });
     map.addControl(overlay as unknown as maplibregl.IControl);
@@ -248,12 +431,29 @@ export function FlightMap({
     overlayRef.current = overlay;
 
     return () => {
+      map.off('dragstart', releaseCameraToFree);
+      map.off('rotatestart', releaseCameraToFree);
       overlay.finalize();
       map.remove();
       overlayRef.current = null;
       mapRef.current = null;
     };
-  }, []);
+  }, [releaseCameraToFree, selectedBasemap]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+
+    if (!map) {
+      return;
+    }
+
+    if (!basemapStyleInitializedRef.current) {
+      basemapStyleInitializedRef.current = true;
+      return;
+    }
+
+    map.setStyle(selectedBasemap.createStyle());
+  }, [selectedBasemap]);
 
   useEffect(() => {
     overlayRef.current?.setProps({ layers });
@@ -263,7 +463,8 @@ export function FlightMap({
     cameraModeRef.current = cameraMode;
     cameraSettingsRef.current = cameraSettings;
     selectedFlightRef.current = selectedFlight;
-  }, [cameraMode, cameraSettings, selectedFlight]);
+    onCameraModeChangeRef.current = onCameraModeChange;
+  }, [cameraMode, cameraSettings, onCameraModeChange, selectedFlight]);
 
   function easeSelectedCamera(durationMs?: number) {
     const activeMap = mapRef.current;
@@ -277,18 +478,20 @@ export function FlightMap({
 
     const now = window.performance.now();
     let bearing = activeMap.getBearing();
+    const zoom = activeMode === 'chase' ? Math.max(activeMap.getZoom(), chaseCameraMinZoom) : activeMap.getZoom();
 
     if (activeMode === 'chase' && hasHeading(activeFlight)) {
-      bearing = activeFlight.headingDeg;
+      bearing = getNearestBearingEquivalent(bearing, getChaseCameraBearing(activeFlight));
     }
 
     lastCameraUpdateRef.current = now;
     activeMap.easeTo({
       center: [activeFlight.lon, activeFlight.lat],
-      pitch: activeMode === 'chase' ? 65 : 42,
+      zoom,
+      pitch: activeMode === 'chase' ? chaseCameraPitch : followCameraPitch,
       bearing,
-      offset: getCameraOffset(activeFlight, activeSettings.framing),
-      duration: durationMs ?? (activeMode === 'chase' ? 800 : 650),
+      offset: getActiveCameraOffset(activeFlight, activeMode, activeSettings.framing),
+      duration: durationMs ?? (activeMode === 'chase' ? chaseCameraEaseMs : followCameraEaseMs),
       essential: true
     });
   }
@@ -300,7 +503,7 @@ export function FlightMap({
       return;
     }
 
-    const minUpdateMs = minCameraUpdateMs;
+    const minUpdateMs = cameraMode === 'chase' ? chaseCameraUpdateMs : followCameraUpdateMs;
     const elapsedMs = window.performance.now() - lastCameraUpdateRef.current;
     if (elapsedMs >= minUpdateMs) {
       easeSelectedCamera();
@@ -334,6 +537,26 @@ export function FlightMap({
         <span>Aircraft Style</span>
         <strong>{effectiveVisualMode}</strong>
       </div>
+      <div className="basemap-control" aria-label="Basemap style">
+        <div className="basemap-control-header">
+          <span>Basemap</span>
+          <strong>{selectedBasemap.label}</strong>
+        </div>
+        <div className="basemap-buttons">
+          {basemapStyles.map((style) => (
+            <button
+              aria-pressed={basemapId === style.id}
+              className={basemapId === style.id ? 'basemap-button active' : 'basemap-button'}
+              key={style.id}
+              onClick={() => setBasemapId(style.id)}
+              title={style.description}
+              type="button"
+            >
+              {style.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="camera-control" aria-label="Camera mode">
         <div className="camera-control-header">
           <span>Camera</span>
@@ -359,7 +582,9 @@ export function FlightMap({
             {cameraMode === 'free'
               ? 'Manual pan, zoom, pitch, and bearing.'
               : selectedFlight
-                ? 'MapLibre is easing center, bearing, pitch, and offset.'
+                ? cameraMode === 'chase'
+                  ? 'MapLibre is matching aircraft heading and holding the camera behind it.'
+                  : 'MapLibre is easing center, bearing, pitch, and offset.'
                 : 'Cinematic controls are inactive until an aircraft is selected.'}
           </p>
         )}

@@ -1,20 +1,46 @@
 import { writeFileSync } from 'node:fs';
 
 const outputPath = new URL('../public/models/airplane.glb', import.meta.url);
-const positions = [];
-const normals = [];
-const indices = [];
+const primitives = [];
+let activePrimitive = null;
+
+function createPrimitive(name, materialIndex) {
+  return {
+    name,
+    materialIndex,
+    positions: [],
+    normals: [],
+    indices: []
+  };
+}
+
+function withPrimitive(name, materialIndex, build) {
+  const previousPrimitive = activePrimitive;
+  const primitive = createPrimitive(name, materialIndex);
+  activePrimitive = primitive;
+  build();
+  primitives.push(primitive);
+  activePrimitive = previousPrimitive;
+}
 
 function pushVertex(position, normal) {
-  positions.push(...position);
-  normals.push(...normal);
-  return positions.length / 3 - 1;
+  if (!activePrimitive) {
+    throw new Error('No active primitive while building aircraft geometry.');
+  }
+
+  activePrimitive.positions.push(...position);
+  activePrimitive.normals.push(...normal);
+  return activePrimitive.positions.length / 3 - 1;
 }
 
 function addQuad(corners, normal) {
-  const start = positions.length / 3;
+  if (!activePrimitive) {
+    throw new Error('No active primitive while adding a quad.');
+  }
+
+  const start = activePrimitive.positions.length / 3;
   corners.forEach((corner) => pushVertex(corner, normal));
-  indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
+  activePrimitive.indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
 }
 
 function addBox(center, size) {
@@ -89,6 +115,10 @@ function normalize(vector) {
 }
 
 function addTriangle(a, b, c) {
+  if (!activePrimitive) {
+    throw new Error('No active primitive while adding a triangle.');
+  }
+
   const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
   const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
   const normal = normalize([
@@ -96,9 +126,9 @@ function addTriangle(a, b, c) {
     ab[2] * ac[0] - ab[0] * ac[2],
     ab[0] * ac[1] - ab[1] * ac[0]
   ]);
-  const start = positions.length / 3;
+  const start = activePrimitive.positions.length / 3;
   [a, b, c].forEach((point) => pushVertex(point, normal));
-  indices.push(start, start + 1, start + 2);
+  activePrimitive.indices.push(start, start + 1, start + 2);
 }
 
 function addNose() {
@@ -130,25 +160,67 @@ function addVerticalTail() {
   addQuad([leftTop, rightTop, rightBase, leftBase], [0, 1, 0]);
 }
 
-// Local +Y is the airplane nose direction; FlightMap keeps a named yaw offset for future model swaps.
-addBox([0, -0.2, 0], [0.5, 5.1, 0.48]);
-addNose();
-addBox([0, 0.1, 0.02], [5.1, 1.15, 0.08]);
-addBox([0, -2.65, 0.12], [1.9, 0.62, 0.08]);
-addVerticalTail();
-
-const positionArray = new Float32Array(positions);
-const normalArray = new Float32Array(normals);
-const indexArray = new Uint16Array(indices);
-const min = [Infinity, Infinity, Infinity];
-const max = [-Infinity, -Infinity, -Infinity];
-
-for (let index = 0; index < positionArray.length; index += 3) {
-  for (let axis = 0; axis < 3; axis += 1) {
-    min[axis] = Math.min(min[axis], positionArray[index + axis]);
-    max[axis] = Math.max(max[axis], positionArray[index + axis]);
+const materials = [
+  {
+    name: 'WarmWhiteFuselage',
+    pbrMetallicRoughness: {
+      baseColorFactor: [0.92, 0.96, 1, 1],
+      metallicFactor: 0.03,
+      roughnessFactor: 0.46
+    }
+  },
+  {
+    name: 'AviationBlueTrim',
+    pbrMetallicRoughness: {
+      baseColorFactor: [0.04, 0.32, 0.72, 1],
+      metallicFactor: 0.08,
+      roughnessFactor: 0.38
+    }
+  },
+  {
+    name: 'SkyBlueHighlight',
+    pbrMetallicRoughness: {
+      baseColorFactor: [0.2, 0.72, 0.98, 1],
+      metallicFactor: 0.04,
+      roughnessFactor: 0.42
+    }
+  },
+  {
+    name: 'CharcoalCanopy',
+    pbrMetallicRoughness: {
+      baseColorFactor: [0.03, 0.08, 0.14, 1],
+      metallicFactor: 0.02,
+      roughnessFactor: 0.24
+    }
   }
-}
+];
+
+// Local +Y is the airplane nose direction; FlightMap keeps a named yaw offset for future model swaps.
+withPrimitive('white-fuselage', 0, () => {
+  addBox([0, -0.2, 0], [0.5, 5.1, 0.48]);
+});
+withPrimitive('blue-nose-and-tailplanes', 1, () => {
+  addNose();
+  addBox([0, -2.65, 0.12], [1.9, 0.62, 0.08]);
+});
+withPrimitive('blue-main-wing', 1, () => {
+  addBox([0, 0.1, 0.02], [5.1, 1.15, 0.08]);
+});
+withPrimitive('white-wing-inlays', 0, () => {
+  addBox([-1.35, 0.16, 0.08], [1.35, 0.46, 0.045]);
+  addBox([1.35, 0.16, 0.08], [1.35, 0.46, 0.045]);
+});
+withPrimitive('sky-blue-fuselage-stripe', 2, () => {
+  addBox([0, 0.18, 0.28], [0.22, 3.1, 0.055]);
+  addBox([-0.285, -0.1, 0.04], [0.055, 3.55, 0.18]);
+  addBox([0.285, -0.1, 0.04], [0.055, 3.55, 0.18]);
+});
+withPrimitive('dark-canopy', 3, () => {
+  addBox([0, 1.65, 0.34], [0.38, 0.72, 0.11]);
+});
+withPrimitive('blue-vertical-tail', 1, () => {
+  addVerticalTail();
+});
 
 function toPaddedBuffer(typedArray) {
   const source = Buffer.from(typedArray.buffer);
@@ -162,10 +234,93 @@ function padJson(json) {
   return padding === 0 ? source : Buffer.concat([source, Buffer.alloc(padding, 0x20)]);
 }
 
-const positionBuffer = toPaddedBuffer(positionArray);
-const normalBuffer = toPaddedBuffer(normalArray);
-const indexBuffer = toPaddedBuffer(indexArray);
-const bufferLength = positionBuffer.length + normalBuffer.length + indexBuffer.length;
+const bufferViews = [];
+const accessors = [];
+const meshPrimitives = [];
+const binaryParts = [];
+let byteOffset = 0;
+let totalVertexCount = 0;
+let totalIndexCount = 0;
+const bounds = {
+  min: [Infinity, Infinity, Infinity],
+  max: [-Infinity, -Infinity, -Infinity]
+};
+
+function pushBufferView(typedArray, target) {
+  const paddedBuffer = toPaddedBuffer(typedArray);
+  const bufferViewIndex = bufferViews.length;
+  bufferViews.push({
+    buffer: 0,
+    byteOffset,
+    byteLength: typedArray.byteLength,
+    target
+  });
+  binaryParts.push(paddedBuffer);
+  byteOffset += paddedBuffer.length;
+
+  return bufferViewIndex;
+}
+
+for (const primitive of primitives) {
+  const positionArray = new Float32Array(primitive.positions);
+  const normalArray = new Float32Array(primitive.normals);
+  const indexArray = new Uint16Array(primitive.indices);
+  const primitiveMin = [Infinity, Infinity, Infinity];
+  const primitiveMax = [-Infinity, -Infinity, -Infinity];
+
+  for (let index = 0; index < positionArray.length; index += 3) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      primitiveMin[axis] = Math.min(primitiveMin[axis], positionArray[index + axis]);
+      primitiveMax[axis] = Math.max(primitiveMax[axis], positionArray[index + axis]);
+      bounds.min[axis] = Math.min(bounds.min[axis], positionArray[index + axis]);
+      bounds.max[axis] = Math.max(bounds.max[axis], positionArray[index + axis]);
+    }
+  }
+
+  const positionBufferView = pushBufferView(positionArray, 34962);
+  const normalBufferView = pushBufferView(normalArray, 34962);
+  const indexBufferView = pushBufferView(indexArray, 34963);
+  const positionAccessor = accessors.length;
+  accessors.push({
+    bufferView: positionBufferView,
+    componentType: 5126,
+    count: positionArray.length / 3,
+    type: 'VEC3',
+    min: primitiveMin,
+    max: primitiveMax
+  });
+
+  const normalAccessor = accessors.length;
+  accessors.push({
+    bufferView: normalBufferView,
+    componentType: 5126,
+    count: normalArray.length / 3,
+    type: 'VEC3'
+  });
+
+  const indexAccessor = accessors.length;
+  accessors.push({
+    bufferView: indexBufferView,
+    componentType: 5123,
+    count: indexArray.length,
+    type: 'SCALAR'
+  });
+
+  meshPrimitives.push({
+    attributes: {
+      POSITION: positionAccessor,
+      NORMAL: normalAccessor
+    },
+    indices: indexAccessor,
+    material: primitive.materialIndex,
+    mode: 4
+  });
+
+  totalVertexCount += positionArray.length / 3;
+  totalIndexCount += indexArray.length;
+}
+
+const binaryChunk = Buffer.concat(binaryParts);
 const json = {
   asset: {
     version: '2.0',
@@ -177,76 +332,16 @@ const json = {
   meshes: [
     {
       name: 'RecognizableLowPolyAircraft',
-      primitives: [
-        {
-          attributes: {
-            POSITION: 0,
-            NORMAL: 1
-          },
-          indices: 2,
-          material: 0,
-          mode: 4
-        }
-      ]
+      primitives: meshPrimitives
     }
   ],
-  materials: [
-    {
-      name: 'RepoGeneratedAircraftBlue',
-      pbrMetallicRoughness: {
-        baseColorFactor: [0.62, 0.86, 1, 1],
-        metallicFactor: 0.05,
-        roughnessFactor: 0.72
-      }
-    }
-  ],
-  accessors: [
-    {
-      bufferView: 0,
-      componentType: 5126,
-      count: positionArray.length / 3,
-      type: 'VEC3',
-      min,
-      max
-    },
-    {
-      bufferView: 1,
-      componentType: 5126,
-      count: normalArray.length / 3,
-      type: 'VEC3'
-    },
-    {
-      bufferView: 2,
-      componentType: 5123,
-      count: indexArray.length,
-      type: 'SCALAR'
-    }
-  ],
-  bufferViews: [
-    {
-      buffer: 0,
-      byteOffset: 0,
-      byteLength: positionArray.byteLength,
-      target: 34962
-    },
-    {
-      buffer: 0,
-      byteOffset: positionBuffer.length,
-      byteLength: normalArray.byteLength,
-      target: 34962
-    },
-    {
-      buffer: 0,
-      byteOffset: positionBuffer.length + normalBuffer.length,
-      byteLength: indexArray.byteLength,
-      target: 34963
-    }
-  ],
-  buffers: [{ byteLength: bufferLength }]
+  materials,
+  accessors,
+  bufferViews,
+  buffers: [{ byteLength: binaryChunk.length }]
 };
 
 const jsonChunk = padJson(json);
-const binaryChunk = Buffer.concat([positionBuffer, normalBuffer, indexBuffer]);
 const glbLength = 12 + 8 + jsonChunk.length + 8 + binaryChunk.length;
 const header = Buffer.alloc(12);
 header.writeUInt32LE(0x46546c67, 0);
@@ -263,7 +358,8 @@ binaryHeader.writeUInt32LE(0x004e4942, 4);
 
 writeFileSync(outputPath, Buffer.concat([header, jsonHeader, jsonChunk, binaryHeader, binaryChunk]));
 console.log(`Wrote ${outputPath.pathname}`);
-console.log(`Vertices: ${positionArray.length / 3}`);
-console.log(`Indices: ${indexArray.length}`);
-console.log(`Triangles: ${indexArray.length / 3}`);
-console.log(`Bounds: min ${min.join(', ')} max ${max.join(', ')}`);
+console.log(`Primitives: ${primitives.length}`);
+console.log(`Vertices: ${totalVertexCount}`);
+console.log(`Indices: ${totalIndexCount}`);
+console.log(`Triangles: ${totalIndexCount / 3}`);
+console.log(`Bounds: min ${bounds.min.join(', ')} max ${bounds.max.join(', ')}`);
