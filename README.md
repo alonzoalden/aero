@@ -24,6 +24,12 @@ The backend defaults to simulated mock data. To use public ADS-B data from Airpl
 FLIGHT_DATA_SOURCE=airplanes-live npm run dev:server
 ```
 
+To run the richer synthetic operations demo around Southern California/LAX:
+
+```bash
+FLIGHT_DATA_SOURCE=demo-ops npm run dev:all
+```
+
 To run the local-only Scale Lab stress mode:
 
 ```bash
@@ -45,7 +51,7 @@ server/                  Express ingest server, providers, normalization, WebSoc
 ## Architecture
 
 ```text
-Airplanes.live REST API, mock provider, or local stress provider
+Airplanes.live REST API, demo-ops provider, mock provider, or local stress provider
   -> Express ingest/normalization server
   -> local WebSocket stream
   -> useFlightStream hook
@@ -123,11 +129,40 @@ Future 3D tickets:
 
 ## Real vs Simulated
 
-- `FLIGHT_DATA_SOURCE=mock` uses local simulated flights between hardcoded airports and mock alerts.
-- `FLIGHT_DATA_SOURCE=airplanes-live` polls `https://api.airplanes.live/v2/point/33.9416/-118.4085/100` every 10 seconds and streams normalized aircraft near LAX.
-- `FLIGHT_DATA_SOURCE=stress` is local-only synthetic load around Southern California. It is not ADS-B data.
+- `FLIGHT_DATA_SOURCE=mock` uses a small, simple, predictable local sample with hardcoded airport pairs and mock alerts.
+- `FLIGHT_DATA_SOURCE=airplanes-live` polls `https://api.airplanes.live/v2/point/33.9416/-118.4085/100` every 10 seconds and streams normalized public ADS-B-derived aircraft near LAX. It is real provider data, but intentionally conservative and REST-polled.
+- `FLIGHT_DATA_SOURCE=demo-ops` is synthetic operational demo data around Southern California/LAX. It simulates faster WebSocket updates, route context, departures, arrivals, regional traffic, cargo callsigns, holding patterns, low-altitude tracks, and demo-only alerts.
+- `FLIGHT_DATA_SOURCE=stress` is local-only scale/load simulation around Southern California. It is not ADS-B data and is meant to demonstrate backend coalescing and frontend rendering behavior.
 - Airplanes.live records may not include route facts such as origin or destination. The UI displays those fields as `unknown`; it does not fabricate them.
-- Alerts remain simulated examples in mock mode only. Weather, route planning, persistence, auth, queues, and deployment are intentionally out of scope.
+- Alerts in `mock` and `demo-ops` are simulated examples only. Weather, route planning, persistence, auth, queues, and deployment are intentionally out of scope.
+
+## Demo Ops
+
+Demo Ops is the interview/demo source for showing a more alive live-ops experience without pretending to be FAA or ATC data. It keeps the same backend contract as every other source:
+
+```text
+synthetic route simulation
+  -> Express latest-state cache
+  -> WebSocket batch messages
+  -> useFlightStream hook
+  -> React selected-flight state + deck.gl aircraft overlays + D3 chart
+```
+
+It defaults to about 30 aircraft and broadcasts several times per second:
+
+```bash
+FLIGHT_DATA_SOURCE=demo-ops npm run dev:all
+```
+
+Optional settings are clamped for local safety:
+
+- `DEMO_OPS_AIRCRAFT_COUNT`, default `30`, range `5`-`80`.
+- `DEMO_OPS_BROADCAST_HZ`, default `3`, range `1`-`10`.
+- `DEMO_OPS_SCENARIO`, default `socal`.
+
+The simulated traffic includes LAX departures toward JFK, ORD, ATL, DFW, SEA, SFO, LAS, PHX, and DEN; arrivals back into LAX; regional LAX/SFO/LAS/SAN/PHX traffic; FDX/UPS-style cargo flights; holding patterns near coastal and inland approach corridors; and a few low-altitude general aviation or helicopter-like tracks. Callsigns, origins, destinations, headings, altitude, speed, vertical rate, source, and last-seen values are all populated through the same `FlightPositionUpdate` model consumed by the frontend.
+
+Demo Ops alerts are clearly labeled demo-only and exist to make the operations panel useful during a walkthrough: holding pattern, descent monitor, route deviation, lost update simulation, altitude conflict warning when one is detected, and flow-control/weather-style info.
 
 ## Scale Lab
 
@@ -184,6 +219,7 @@ Angular components and templates map roughly to React components and JSX. Angula
 - `npm run build`: create a production build.
 - `npm run typecheck`: run TypeScript checks.
 - `npm run lint`: run ESLint.
+- `npm test`: run Node tests for pure backend/provider logic.
 - `npm run verify:model`: inspect `public/models/airplane.glb` and fail if it has no mesh geometry.
 
 ## Interview Talking Points
@@ -198,12 +234,14 @@ Angular components and templates map roughly to React components and JSX. Angula
 - Explain why D3 is used for chart helpers, not as the map renderer.
 - Explain why public REST ingestion belongs on the backend, not in browser components.
 - Point out which data is real ADS-B-derived provider data and which demo behavior remains simulated.
+- Explain why real public ADS-B REST polling is kept as proof of real-data integration, while `demo-ops` demonstrates how the frontend behaves with a richer operational stream.
 
 ## Known Demo Limitations
 
 - Airplanes.live is polled conservatively and may omit callsign, altitude, heading, origin, or destination.
 - Live mode has no provider caching beyond short in-memory latest-aircraft/history maps.
 - Mock mode still uses linear interpolation between hardcoded airports.
+- Demo Ops is synthetic and demo-only. It uses plausible route shapes and alerts, not real FAA, ATC, airline, weather, or flow-control data.
 - Stress mode is synthetic and local-only; it demonstrates load shape, not real traffic behavior.
 - Scale metrics are in-memory process metrics, not durable observability.
 - Mock alerts are static examples, not derived from real operational rules.

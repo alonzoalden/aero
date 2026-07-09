@@ -29,6 +29,7 @@ export function OperationsPanel({
   onSelectFlight
 }: OperationsPanelProps) {
   const isStressMode = serverStatus?.source === 'stress';
+  const isDemoOpsMode = serverStatus?.source === 'demo-ops';
   const visibleFlights = isStressMode ? flights.slice(0, 80) : flights;
   const hiddenFlightCount = Math.max(0, flights.length - visibleFlights.length);
   const scaleMetrics = serverStatus?.scaleMetrics;
@@ -57,6 +58,9 @@ export function OperationsPanel({
             {serverStatus?.lastBroadcastTimestamp ? formatTime(serverStatus.lastBroadcastTimestamp) : 'unknown'}
           </strong>
         </div>
+        {isDemoOpsMode ? (
+          <p className="muted source-note">Demo Ops is synthetic data designed to show frontend/live-ops behavior.</p>
+        ) : null}
       </section>
 
       {isStressMode ? (

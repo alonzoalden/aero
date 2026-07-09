@@ -9,7 +9,8 @@
     "build": "next build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "verify:model": "node scripts/verify-airplane-glb.mjs"
+    "verify:model": "node scripts/verify-airplane-glb.mjs",
+    "test": "node --import tsx --test server/*.test.ts"
   },
   "dependencies": {
     "@deck.gl/core": "^9.3.6",

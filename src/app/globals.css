@@ -385,6 +385,12 @@ button {
   line-height: 1.4;
 }
 
+.source-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .detail-grid {
   display: grid;
   grid-template-columns: 90px 1fr;

@@ -16,7 +16,11 @@ type SimFlight = {
   destination: Airport;
   progress: number;
   speedFactor: number;
-  baseAltitudeFt: number;
+  lowAltitudeFt: number;
+  cruiseAltitudeFt: number;
+  altitudeWaveFt: number;
+  altitudePhase: number;
+  altitudeStepFt: number;
 };
 
 const airports: Record<AirportCode, Airport> = {
@@ -76,14 +80,18 @@ function createFlight(
     destination,
     progress,
     speedFactor,
-    baseAltitudeFt: 29000 + Math.round(Math.random() * 9000)
+    lowAltitudeFt: 2500 + deterministicValue(callsign, 4500),
+    cruiseAltitudeFt: 27000 + deterministicValue(`${callsign}-cruise`, 12000),
+    altitudeWaveFt: 3200 + deterministicValue(`${callsign}-wave`, 3800),
+    altitudePhase: deterministicValue(`${callsign}-phase`, 360) * (Math.PI / 180),
+    altitudeStepFt: 1200 + deterministicValue(`${callsign}-step`, 2600)
   };
 }
 
 function toPositionUpdate(flight: SimFlight): FlightPositionUpdate {
   const lat = interpolate(flight.origin.lat, flight.destination.lat, flight.progress);
   const lon = interpolate(flight.origin.lon, flight.destination.lon, flight.progress);
-  const cruiseWave = Math.sin(flight.progress * Math.PI);
+  const altitudeProfile = calculateAltitudeProfile(flight);
   const headingDeg = bearing(flight.origin, flight.destination);
 
   return {
@@ -91,16 +99,50 @@ function toPositionUpdate(flight: SimFlight): FlightPositionUpdate {
     callsign: flight.callsign,
     lat,
     lon,
-    altitudeFt: flight.baseAltitudeFt + Math.round(cruiseWave * 4500),
-    groundSpeedKts: 410 + Math.round(cruiseWave * 80),
+    altitudeFt: altitudeProfile.altitudeFt,
+    groundSpeedKts: altitudeProfile.groundSpeedKts,
     headingDeg,
-    verticalRateFpm: Math.round(Math.cos(flight.progress * Math.PI) * 600),
+    verticalRateFpm: altitudeProfile.verticalRateFpm,
     origin: flight.origin.code,
     destination: flight.destination.code,
     source: 'mock',
     lastSeenSeconds: 0,
     timestamp: new Date().toISOString()
   };
+}
+
+function calculateAltitudeProfile(flight: SimFlight) {
+  const altitudeFt = calculateMockAltitudeFt(flight, flight.progress);
+  const nextProgress = Math.min(1, flight.progress + flight.speedFactor);
+  const nextAltitudeFt = calculateMockAltitudeFt(flight, nextProgress);
+  const cruiseShape = getCruiseShape(flight.progress);
+
+  return {
+    altitudeFt,
+    groundSpeedKts: 250 + Math.round(cruiseShape * 245),
+    verticalRateFpm: Math.round((nextAltitudeFt - altitudeFt) * 60)
+  };
+}
+
+function calculateMockAltitudeFt(flight: SimFlight, progress: number) {
+  const cruiseShape = getCruiseShape(progress);
+  const profileAltitude = interpolate(flight.lowAltitudeFt, flight.cruiseAltitudeFt, cruiseShape);
+  const cruiseWave =
+    Math.sin(progress * Math.PI * 10 + flight.altitudePhase) * flight.altitudeWaveFt * Math.max(0.25, cruiseShape);
+  const stepChange = Math.round(Math.sin(progress * Math.PI * 5 + flight.altitudePhase) * 1.25) * flight.altitudeStepFt;
+  const approachBump = Math.sin(progress * Math.PI * 17 + flight.altitudePhase * 0.6) * 850;
+  const wave = cruiseWave + stepChange + approachBump;
+  const altitudeFt = Math.round(profileAltitude + wave);
+
+  return Math.max(900, altitudeFt);
+}
+
+function getCruiseShape(progress: number) {
+  const climbCruiseDescent = Math.sin(progress * Math.PI);
+  const shaped = Math.pow(Math.max(0, climbCruiseDescent), 0.58);
+
+  // Add a mild stair-step profile so mock charts show level-offs and corrections, not one smooth arc.
+  return Math.max(0, Math.min(1, shaped + Math.sin(progress * Math.PI * 6) * 0.08));
 }
 
 function interpolate(start: number, end: number, progress: number): number {
@@ -118,6 +160,15 @@ function bearing(origin: Airport, destination: Airport): number {
 
 function toRadians(value: number): number {
   return (value * Math.PI) / 180;
+}
+
+function deterministicValue(seed: string, maxExclusive: number): number {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) % 100000;
+  }
+
+  return hash % maxExclusive;
 }
 
 function makeAlert(

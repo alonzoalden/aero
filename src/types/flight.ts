@@ -32,7 +32,7 @@ export type FlightState = FlightPositionUpdate & {
   track: FlightTrackPoint[];
 };
 
-export type FlightDataSource = 'mock' | 'airplanes-live' | 'stress';
+export type FlightDataSource = 'mock' | 'airplanes-live' | 'demo-ops' | 'stress';
 
 export type AircraftVisualMode = 'dots' | 'models' | 'hybrid';
 

@@ -35,7 +35,7 @@ const followCameraUpdateMs = 700;
 const chaseCameraUpdateMs = 180;
 const chaseCameraOffset: [number, number] = [0, 190];
 const chaseCameraPitch = 72;
-const chaseCameraMinZoom = 9.5;
+const chaseCameraInitialZoom = 15;
 const chaseCameraEaseMs = 520;
 const followCameraEaseMs = 650;
 const followCameraPitch = 42;
@@ -205,6 +205,7 @@ export function FlightMap({
   const selectedFlightRef = useRef(selectedFlight);
   const onCameraModeChangeRef = useRef(onCameraModeChange);
   const basemapStyleInitializedRef = useRef(false);
+  const previousCameraModeRef = useRef(cameraMode);
   const [hovered, setHovered] = useState<FlightState | null>(null);
   const [basemapId, setBasemapId] = useState<BasemapStyle['id']>(defaultBasemapId);
   const isDense = flights.length > 250;
@@ -466,7 +467,7 @@ export function FlightMap({
     onCameraModeChangeRef.current = onCameraModeChange;
   }, [cameraMode, cameraSettings, onCameraModeChange, selectedFlight]);
 
-  function easeSelectedCamera(durationMs?: number) {
+  function easeSelectedCamera(durationMs?: number, options?: { applyChaseMinZoom?: boolean }) {
     const activeMap = mapRef.current;
     const activeMode = cameraModeRef.current;
     const activeSettings = cameraSettingsRef.current;
@@ -478,7 +479,10 @@ export function FlightMap({
 
     const now = window.performance.now();
     let bearing = activeMap.getBearing();
-    const zoom = activeMode === 'chase' ? Math.max(activeMap.getZoom(), chaseCameraMinZoom) : activeMap.getZoom();
+    const zoom =
+      activeMode === 'chase' && options?.applyChaseMinZoom
+        ? Math.min(activeMap.getMaxZoom(), chaseCameraInitialZoom)
+        : activeMap.getZoom();
 
     if (activeMode === 'chase' && hasHeading(activeFlight)) {
       bearing = getNearestBearingEquivalent(bearing, getChaseCameraBearing(activeFlight));
@@ -500,13 +504,22 @@ export function FlightMap({
     const map = mapRef.current;
 
     if (!map || cameraMode === 'free' || !selectedFlight) {
+      previousCameraModeRef.current = cameraMode;
       return;
     }
 
+    const enteringChaseMode = cameraMode === 'chase' && previousCameraModeRef.current !== 'chase';
     const minUpdateMs = cameraMode === 'chase' ? chaseCameraUpdateMs : followCameraUpdateMs;
+    if (enteringChaseMode) {
+      easeSelectedCamera(undefined, { applyChaseMinZoom: true });
+      previousCameraModeRef.current = cameraMode;
+      return;
+    }
+
     const elapsedMs = window.performance.now() - lastCameraUpdateRef.current;
     if (elapsedMs >= minUpdateMs) {
       easeSelectedCamera();
+      previousCameraModeRef.current = cameraMode;
       return;
     }
 
@@ -514,6 +527,7 @@ export function FlightMap({
       window.clearTimeout(cameraTimeoutRef.current);
     }
     cameraTimeoutRef.current = window.setTimeout(easeSelectedCamera, minUpdateMs - elapsedMs);
+    previousCameraModeRef.current = cameraMode;
 
     return () => {
       if (cameraTimeoutRef.current) {

@@ -2,6 +2,7 @@ import http from 'node:http';
 import express from 'express';
 import { createAirplanesLiveProvider } from './airplanesLiveProvider';
 import { config } from './config';
+import { createDemoOpsProvider } from './demoOpsProvider';
 import { FlightHistoryStore } from './flightHistoryStore';
 import { createMockProvider } from './mockProvider';
 import { createStressProvider } from './stressProvider';
@@ -13,13 +14,15 @@ const app = express();
 const httpServer = http.createServer(app);
 const store = new FlightHistoryStore();
 const provider: AircraftProvider | null =
-  config.dataSource === 'stress'
+  config.dataSource === 'stress' || config.dataSource === 'demo-ops'
     ? null
     : config.dataSource === 'airplanes-live'
       ? createAirplanesLiveProvider(config.airplanesLiveUrl)
       : createMockProvider();
 const stressProvider =
   config.dataSource === 'stress' ? createStressProvider(config.stress.aircraftCount) : null;
+const demoOpsProvider =
+  config.dataSource === 'demo-ops' ? createDemoOpsProvider(config.demoOps.aircraftCount) : null;
 
 let alerts: FlightAlert[] = [];
 let lastPollTimestamp: string | null = null;
@@ -37,7 +40,7 @@ let rawUpdatesSinceBroadcast = 0;
 const socketServer = createWebSocketFlightServer({
   server: httpServer,
   getStatus,
-  getSnapshot: () => stressProvider?.getSnapshot() ?? store.getFlights(),
+  getSnapshot: () => stressProvider?.getSnapshot() ?? demoOpsProvider?.getSnapshot() ?? store.getFlights(),
   getAlerts: () => alerts
 });
 
@@ -58,11 +61,18 @@ httpServer.listen(config.port, () => {
         `${config.stress.ingestUpdatesPerSec} ingest updates/sec, ` +
         `${config.stress.broadcastHz} broadcasts/sec`
     );
+  } else if (config.dataSource === 'demo-ops') {
+    console.log(
+      `Demo Ops mode: ${config.demoOps.aircraftCount} aircraft, ` +
+        `${config.demoOps.broadcastHz} broadcasts/sec, scenario=${config.demoOps.scenario}`
+    );
   }
 });
 
 if (stressProvider) {
   startStressMode();
+} else if (demoOpsProvider) {
+  startDemoOpsMode();
 } else {
   void pollProvider();
   setInterval(() => {
@@ -104,6 +114,38 @@ async function pollProvider() {
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
   }
+}
+
+function startDemoOpsMode() {
+  if (!demoOpsProvider) {
+    return;
+  }
+
+  const broadcastMs = Math.round(1000 / config.demoOps.broadcastHz);
+  const tickSeconds = broadcastMs / 1000;
+
+  setInterval(() => {
+    const timestamp = new Date().toISOString();
+    demoOpsProvider.tick(tickSeconds);
+    const updates = demoOpsProvider.drainChangedUpdates(timestamp);
+    alerts = demoOpsProvider.getAlerts(timestamp);
+    lastPollTimestamp = timestamp;
+    store.upsertMany(updates);
+    lastBroadcastTimestamp = timestamp;
+    ingestUpdatesThisSecond += updates.length;
+    aircraftUpdatesBroadcastThisSecond += updates.length;
+
+    const message: FlightStreamMessage = {
+      type: 'batch',
+      flights: updates,
+      alerts,
+      status: getStatus(),
+      sequence: nextSequence(),
+      serverTimestamp: timestamp
+    };
+
+    webSocketMessagesThisSecond += socketServer.broadcast(message);
+  }, broadcastMs);
 }
 
 function startStressMode() {
@@ -167,7 +209,7 @@ function getStatus(): FlightServerStatus {
   return {
     source: config.dataSource,
     connectedClients: socketServer.clientCount,
-    aircraftCount: stressProvider?.aircraftCount ?? store.aircraftCount,
+    aircraftCount: stressProvider?.aircraftCount ?? demoOpsProvider?.aircraftCount ?? store.aircraftCount,
     lastPollTimestamp,
     lastBroadcastTimestamp,
     scaleMetrics
