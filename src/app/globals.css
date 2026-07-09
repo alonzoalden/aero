@@ -60,7 +60,6 @@ button {
 .map-title,
 .map-hover-card,
 .visual-mode-badge,
-.model-diagnostics,
 .camera-control {
   position: absolute;
   z-index: 2;
@@ -103,60 +102,6 @@ button {
 .visual-mode-badge strong {
   color: var(--accent);
   text-transform: capitalize;
-}
-
-.model-diagnostics {
-  left: 58px;
-  top: 150px;
-  display: grid;
-  gap: 8px;
-  width: min(360px, calc(100vw - 460px));
-  padding: 10px;
-  font-size: 12px;
-}
-
-.diagnostic-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.diagnostic-heading span,
-.model-diagnostics dt,
-.model-diagnostics p {
-  color: var(--muted);
-}
-
-.diagnostic-heading strong {
-  color: var(--accent);
-  text-transform: capitalize;
-}
-
-.model-diagnostics dl {
-  display: grid;
-  gap: 5px;
-  margin: 0;
-}
-
-.model-diagnostics dl > div {
-  display: grid;
-  grid-template-columns: 82px minmax(0, 1fr);
-  gap: 8px;
-}
-
-.model-diagnostics dt,
-.model-diagnostics dd {
-  margin: 0;
-}
-
-.model-diagnostics dd {
-  overflow-wrap: anywhere;
-}
-
-.model-diagnostics p {
-  margin: 0;
-  line-height: 1.35;
 }
 
 .map-hover-card {
@@ -479,9 +424,4 @@ button {
     border-top: 1px solid var(--border);
   }
 
-  .model-diagnostics {
-    left: 16px;
-    top: 150px;
-    width: min(340px, calc(100vw - 32px));
-  }
 }

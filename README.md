@@ -63,19 +63,14 @@ The frontend never calls public aviation APIs directly. Public REST calls happen
 The map has three camera modes:
 
 - `Free`: default manual map interaction. Selecting an aircraft does not move the camera.
-- `Follow`: centers the selected aircraft with moderate zoom and pitch.
+- `Follow`: centers the selected aircraft with moderate pitch while preserving the user's current zoom.
 - `Chase`: centers near the selected aircraft, uses a higher pitch, and eases the MapLibre bearing toward aircraft heading when heading is available.
 
-The Cinematic Camera controls add two optional behaviors on top of those modes:
+MapLibre owns camera movement through `easeTo`: center, pitch, bearing, and offset. deck.gl overlays stay synced because they are rendered on top of the MapLibre camera. React only stores the selected aircraft, camera mode, and camera settings; it does not render aircraft markers as DOM nodes.
 
-- `Orbit`: when an aircraft is selected and the mode is Follow or Chase, MapLibre slowly increases the map bearing while keeping the camera centered near the selected aircraft. Slow is the default; medium is still intentionally restrained. Orbit is most natural in Follow mode because Chase also wants bearing to follow aircraft heading.
-- `Camera Framing`: Center keeps the aircraft near the middle of the viewport. Look Ahead uses aircraft heading, when available, to offset the aircraft slightly behind its direction of travel so more map is visible ahead. Lower Third uses a simple vertical MapLibre camera offset so the aircraft appears lower on the screen.
+Follow and Chase need an explicit selected aircraft. If the user manually pans, zooms, or rotates while Follow or Chase is active, the app allows the gesture, then the next throttled selected-aircraft update recenters the camera without changing the user's zoom. Camera updates are throttled so high-rate WebSocket streams do not call `easeTo` on every aircraft message.
 
-MapLibre owns camera movement through `easeTo`: center, zoom, pitch, bearing, and offset. deck.gl overlays stay synced because they are rendered on top of the MapLibre camera. React only stores the selected aircraft, camera mode, and cinematic camera settings; it does not render aircraft markers as DOM nodes.
-
-Follow and Chase need an explicit selected aircraft. If the user manually pans, zooms, or rotates while Follow or Chase is active, the app allows the gesture, then the next throttled selected-aircraft update recenters the camera. Camera updates are throttled so high-rate WebSocket streams do not call `easeTo` on every aircraft message.
-
-This is still MapLibre camera control, not a cockpit, first-person, or full 3D scene. The 3D aircraft model mode is a deck.gl overlay, not a separate Three.js scene or deck.gl `FirstPersonView`. The offsets are approximate map-camera effects, and Orbit can conflict with Chase because Chase bearing is based on aircraft heading while Orbit bearing is time-based.
+This is still MapLibre camera control, not a cockpit, first-person, or full 3D scene. The 3D aircraft model mode is a deck.gl overlay, not a separate Three.js scene or deck.gl `FirstPersonView`.
 
 Future camera tickets:
 
@@ -88,9 +83,8 @@ Future camera tickets:
 Aircraft can render in three visual modes:
 
 - `Dots`: the original deck.gl `ScatterplotLayer` circle markers plus labels when density is low. This remains the best view for stress mode and very high aircraft counts.
-- `Models`: a deck.gl `ScenegraphLayer` renders a local glTF/GLB airplane model for every aircraft while the count is below the demo safety cap.
+- `Models`: a deck.gl `ScenegraphLayer` renders a local glTF/GLB airplane model for every aircraft.
 - `Hybrid`: the selected aircraft renders as a 3D model and the rest remain dots. This is the default because it gives a clear selected-aircraft visual without paying the cost of thousands of model instances.
-- `Proof`: a fixed ScenegraphLayer test aircraft renders near LAX with dots suppressed, so model rendering can be verified without depending on stream state.
 
 The model asset is `public/models/airplane.glb`, a generated low-poly demo aircraft created for this repo by `scripts/create-airplane-glb.mjs`. It is not downloaded from a third-party model site and has no external license dependency. The generated shape intentionally includes a fuselage, nose, broad wings, horizontal stabilizer, and vertical tail so ScenegraphLayer draws something recognizable at map scale.
 
@@ -108,16 +102,16 @@ This does not require Three.js yet because the app is not building a standalone 
 
 The model layer uses aircraft `headingDeg` for orientation and keeps the correction in `AIRCRAFT_MODEL_YAW_OFFSET_DEG` because model forward axes vary by asset. The generated model points along local `+Y`, so the current offset is `0`. ADS-B altitude is feet, while deck.gl elevation is meters; the implementation converts feet to meters and applies a small readability scale with clamps so aircraft remain visible over the map instead of trying to be a precise flight simulator.
 
-Models are capped at 300 aircraft in this demo. If the user selects `Models` above that threshold, the map falls back to dots and the UI explains why. Dots remain useful because high-density geospatial views need legibility and predictable local performance more than per-aircraft 3D detail.
+Models intentionally stay in the airplane-model path when selected. Dots remain useful because high-density geospatial views need legibility and predictable local performance more than per-aircraft 3D detail.
 
-The default `Hybrid` mode auto-selects the first arriving aircraft, then renders that selected aircraft as the dominant ScenegraphLayer model while keeping smaller, fainter dots for surrounding context. `Proof` mode is a debug mode that always renders one obvious model instance at a fixed test position near LAX. The map also shows a diagnostics readout with the asset URL, fetch status, draw status, byte size, model status, active model count, current visual mode, effective visual mode, and exact fallback reason.
+The default `Hybrid` mode auto-selects the first arriving aircraft, then renders that selected aircraft as the dominant ScenegraphLayer model while keeping smaller, fainter dots for surrounding context.
 
 Known limitations:
 
 - Model orientation may need tuning per asset.
 - This is not a true cockpit, first-person, or flight-simulator scene.
 - Altitude scaling is simplified for readability.
-- High model counts can be expensive, so the demo protects itself with a 300-aircraft cap.
+- High model counts can be expensive; switch to `Dots` or `Hybrid` for dense stress-mode views.
 
 Future 3D tickets:
 

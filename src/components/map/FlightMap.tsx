@@ -6,7 +6,6 @@ import { MapboxOverlay } from '@deck.gl/mapbox';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers';
 import maplibregl from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
 import { formatNumber, formatRoute, formatTime } from '@/lib/format';
 import type { CameraFraming, CameraMode, CameraSettings } from '@/types/camera';
 import type { AircraftVisualMode, FlightState } from '@/types/flight';
@@ -19,50 +18,19 @@ type FlightMapProps = {
   selectedFlight: FlightState | null;
   selectedFlightId: string | null;
   onCameraModeChange: (mode: CameraMode) => void;
-  onCameraSettingsChange: Dispatch<SetStateAction<CameraSettings>>;
   onSelectFlight: (flightId: string) => void;
-};
-
-type AircraftModelStatus = 'checking' | 'ready' | 'failed';
-type AircraftModelFetchStatus = 'not-started' | 'ok' | 'http-error' | 'network-error' | 'invalid-glb';
-type AircraftModelDrawStatus = 'not-requested' | 'waiting' | 'drawn' | 'error';
-type AircraftModelDiagnostics = {
-  fetchStatus: AircraftModelFetchStatus;
-  drawStatus: AircraftModelDrawStatus;
-  byteSize: number | null;
-  message: string | null;
 };
 
 const mapStyle = 'https://demotiles.maplibre.org/style.json';
 const aircraftModelUrl = '/models/airplane.glb';
-const aircraftModelThreshold = 300;
 const feetToMeters = 0.3048;
 const altitudeVisualScale = 0.02;
-const aircraftModelScale = 1;
-const selectedAircraftModelScale = 2;
-const proofAircraftModelScale = 3;
-const aircraftModelMinPixels = 4;
-const aircraftModelMaxPixels = 18;
+const aircraftModelScale = 0.5;
+const selectedAircraftModelScale = 0.85;
+const aircraftModelMinPixels = 7;
+const aircraftModelMaxPixels = 24;
 const AIRCRAFT_MODEL_YAW_OFFSET_DEG = 0;
 const minCameraUpdateMs = 700;
-const minOrbitUpdateMs = 900;
-
-const proofFlight: FlightState = {
-  flightId: 'model-proof-aircraft',
-  callsign: 'MODEL-PROOF',
-  lat: 33.9416,
-  lon: -118.4085,
-  altitudeFt: 3200,
-  groundSpeedKts: 180,
-  headingDeg: 285,
-  verticalRateFpm: 0,
-  origin: 'LAX',
-  destination: 'SCENEGRAPH',
-  source: 'mock',
-  lastSeenSeconds: 0,
-  timestamp: new Date(0).toISOString(),
-  track: []
-};
 
 function hasHeading(flight: FlightState): flight is FlightState & { headingDeg: number } {
   return flight.headingDeg !== null && flight.headingDeg !== undefined;
@@ -83,10 +51,6 @@ function getCameraOffset(flight: FlightState, framing: CameraFraming): [number, 
   return [0, 0];
 }
 
-function getOrbitDegreesPerSecond(speed: CameraSettings['orbitSpeed']) {
-  return speed === 'medium' ? 7 : 3;
-}
-
 function getReadableAltitudeMeters(flight: FlightState) {
   if (flight.altitudeFt === null || flight.altitudeFt === undefined) {
     return 80;
@@ -104,53 +68,6 @@ function getAircraftOrientation(flight: FlightState): [number, number, number] {
   return [0, heading + AIRCRAFT_MODEL_YAW_OFFSET_DEG, 0];
 }
 
-function validateAircraftModel(bytes: ArrayBuffer) {
-  const dataView = new DataView(bytes);
-
-  if (bytes.byteLength < 20) {
-    throw new Error('GLB is too small to contain a header and JSON chunk');
-  }
-
-  const magic = dataView.getUint32(0, true);
-  const version = dataView.getUint32(4, true);
-  const declaredLength = dataView.getUint32(8, true);
-
-  if (magic !== 0x46546c67) {
-    throw new Error('GLB magic header is missing');
-  }
-
-  if (version !== 2) {
-    throw new Error(`Unsupported GLB version ${version}`);
-  }
-
-  if (declaredLength !== bytes.byteLength) {
-    throw new Error(`GLB length mismatch: header ${declaredLength}, response ${bytes.byteLength}`);
-  }
-
-  const jsonChunkLength = dataView.getUint32(12, true);
-  const jsonChunkType = dataView.getUint32(16, true);
-
-  if (jsonChunkType !== 0x4e4f534a) {
-    throw new Error('First GLB chunk is not JSON');
-  }
-
-  const jsonBytes = new Uint8Array(bytes, 20, jsonChunkLength);
-  const json = JSON.parse(new TextDecoder().decode(jsonBytes).trim());
-  const meshCount = Array.isArray(json.meshes) ? json.meshes.length : 0;
-  const primitiveCount = Array.isArray(json.meshes)
-    ? json.meshes.reduce(
-        (count: number, mesh: { primitives?: unknown[] }) => count + (Array.isArray(mesh.primitives) ? mesh.primitives.length : 0),
-        0
-      )
-    : 0;
-
-  if (meshCount === 0 || primitiveCount === 0) {
-    throw new Error('GLB has no mesh geometry for ScenegraphLayer');
-  }
-
-  return { meshCount, primitiveCount };
-}
-
 export function FlightMap({
   aircraftVisualMode,
   cameraMode,
@@ -159,48 +76,21 @@ export function FlightMap({
   selectedFlight,
   selectedFlightId,
   onCameraModeChange,
-  onCameraSettingsChange,
   onSelectFlight
 }: FlightMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
   const cameraTimeoutRef = useRef<number | null>(null);
-  const orbitFrameRef = useRef<number | null>(null);
-  const orbitStartedAtRef = useRef<number | null>(null);
-  const orbitStartBearingRef = useRef<number | null>(null);
   const lastCameraUpdateRef = useRef(0);
   const cameraModeRef = useRef(cameraMode);
   const cameraSettingsRef = useRef(cameraSettings);
   const selectedFlightRef = useRef(selectedFlight);
   const [hovered, setHovered] = useState<FlightState | null>(null);
-  const [aircraftModelStatus, setAircraftModelStatus] = useState<AircraftModelStatus>('checking');
-  const [aircraftModelDiagnostics, setAircraftModelDiagnostics] = useState<AircraftModelDiagnostics>({
-    fetchStatus: 'not-started',
-    drawStatus: 'not-requested',
-    byteSize: null,
-    message: null
-  });
   const isDense = flights.length > 250;
-  const shouldFallbackToDots = aircraftVisualMode === 'models' && flights.length > aircraftModelThreshold;
-  const modelRequested = aircraftVisualMode === 'models' || aircraftVisualMode === 'hybrid' || aircraftVisualMode === 'proof';
-  const modelLoadFailed = aircraftModelStatus === 'failed' && modelRequested;
-  const effectiveVisualMode: AircraftVisualMode = shouldFallbackToDots || modelLoadFailed ? 'dots' : aircraftVisualMode;
-  const modelLayerIsAllowed = aircraftModelStatus === 'ready';
-  const fallbackReason = shouldFallbackToDots
-    ? `model cap hit: ${flights.length} aircraft exceeds ${aircraftModelThreshold}`
-    : modelLoadFailed
-      ? aircraftModelDiagnostics.message ?? 'model asset failed validation or loading'
-      : modelRequested && aircraftModelStatus === 'checking'
-        ? 'model asset check pending'
-        : 'none';
+  const effectiveVisualMode = aircraftVisualMode;
   const cameraNeedsSelection = cameraMode !== 'free' && !selectedFlight;
-  const orbitIsActive = cameraMode !== 'free' && cameraSettings.orbitEnabled && Boolean(selectedFlight);
   const modelFlights = useMemo(() => {
-    if (!modelLayerIsAllowed) {
-      return [];
-    }
-
     if (effectiveVisualMode === 'models') {
       return flights;
     }
@@ -209,18 +99,14 @@ export function FlightMap({
       return selectedFlight ? [selectedFlight] : [];
     }
 
-    if (effectiveVisualMode === 'proof') {
-      return [proofFlight];
-    }
-
     return [];
-  }, [effectiveVisualMode, flights, modelLayerIsAllowed, selectedFlight]);
+  }, [effectiveVisualMode, flights, selectedFlight]);
   const modelLayerActiveCount = modelFlights.length;
 
   const layers = useMemo(
     () => {
       const modelOnlyIsActive = effectiveVisualMode === 'models' && modelLayerActiveCount > 0;
-      const dotFlights = modelOnlyIsActive || effectiveVisualMode === 'proof' ? [] : flights;
+      const dotFlights = modelOnlyIsActive ? [] : flights;
       const dotLayerIsVisible = dotFlights.length > 0;
 
       const aircraftDotLayer = dotLayerIsVisible
@@ -270,38 +156,14 @@ export function FlightMap({
               getPosition: (flight) => [flight.lon, flight.lat, getReadableAltitudeMeters(flight)],
               getOrientation: getAircraftOrientation,
               getScale: (flight) => {
-                const scale =
-                  flight.flightId === proofFlight.flightId
-                    ? proofAircraftModelScale
-                    : flight.flightId === selectedFlightId
-                      ? selectedAircraftModelScale
-                      : aircraftModelScale;
+                const scale = flight.flightId === selectedFlightId ? selectedAircraftModelScale : aircraftModelScale;
 
                 return [scale, scale, scale];
               },
               getColor: (flight) =>
-                flight.flightId === proofFlight.flightId || flight.flightId === selectedFlightId
-                  ? [250, 204, 21, 255]
-                  : [125, 211, 252, 245],
-              onFirstDraw: () => {
-                setAircraftModelDiagnostics((diagnostics) => ({
-                  ...diagnostics,
-                  drawStatus: 'drawn',
-                  message:
-                    diagnostics.fetchStatus === 'ok'
-                      ? `${(diagnostics.message ?? 'asset loaded').replace('; first draw complete', '')}; first draw complete`
-                      : diagnostics.message
-                }));
-              },
+                flight.flightId === selectedFlightId ? [250, 204, 21, 255] : [125, 211, 252, 245],
               onError: (error) => {
-                console.warn('Aircraft model layer failed; falling back to dots.', error);
-                const message = error instanceof Error ? error.message : 'ScenegraphLayer failed while loading or drawing';
-                setAircraftModelDiagnostics((diagnostics) => ({
-                  ...diagnostics,
-                  drawStatus: 'error',
-                  message
-                }));
-                setAircraftModelStatus('failed');
+                console.warn('Aircraft model layer failed to load.', error);
                 return true;
               },
               onHover: (info: PickingInfo<FlightState>) => setHovered(info.object ?? null),
@@ -314,12 +176,7 @@ export function FlightMap({
           : null;
 
       const showAllLabels = effectiveVisualMode === 'dots' && !isDense;
-      const selectedLabelFlights =
-        effectiveVisualMode === 'proof'
-          ? [proofFlight]
-          : effectiveVisualMode !== 'dots' && selectedFlight
-            ? [selectedFlight]
-            : [];
+      const selectedLabelFlights = effectiveVisualMode !== 'dots' && selectedFlight ? [selectedFlight] : [];
       const labelFlights = showAllLabels ? flights : selectedLabelFlights;
       const aircraftLabelLayer = new TextLayer<FlightState>({
         id: 'aircraft-labels',
@@ -349,10 +206,6 @@ export function FlightMap({
         return withModelLayer(aircraftDotLayer ? [aircraftDotLayer] : []);
       }
 
-      if (effectiveVisualMode === 'proof') {
-        return withModelLayer(aircraftDotLayer ? [aircraftDotLayer] : []);
-      }
-
       return isDense
         ? aircraftDotLayer
           ? [aircraftDotLayer]
@@ -372,80 +225,6 @@ export function FlightMap({
       selectedFlightId
     ]
   );
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    async function checkAircraftModel() {
-      try {
-        setAircraftModelDiagnostics({
-          fetchStatus: 'not-started',
-          drawStatus: 'waiting',
-          byteSize: null,
-          message: null
-        });
-        const response = await fetch(aircraftModelUrl, { cache: 'no-store' });
-
-        if (!response.ok) {
-          if (!isCancelled) {
-            setAircraftModelDiagnostics({
-              fetchStatus: 'http-error',
-              drawStatus: 'error',
-              byteSize: null,
-              message: `Aircraft model request failed with HTTP ${response.status}`
-            });
-          }
-          throw new Error(`Aircraft model request failed with ${response.status}`);
-        }
-
-        const modelBytes = await response.arrayBuffer();
-
-        let assetSummary: ReturnType<typeof validateAircraftModel>;
-
-        try {
-          assetSummary = validateAircraftModel(modelBytes);
-        } catch (validationError) {
-          if (!isCancelled) {
-            setAircraftModelDiagnostics({
-              fetchStatus: 'invalid-glb',
-              drawStatus: 'error',
-              byteSize: modelBytes.byteLength,
-              message: validationError instanceof Error ? validationError.message : 'Aircraft model failed validation'
-            });
-          }
-          throw validationError;
-        }
-
-        if (!isCancelled) {
-          setAircraftModelDiagnostics({
-            fetchStatus: 'ok',
-            drawStatus: 'waiting',
-            byteSize: modelBytes.byteLength,
-            message: `asset ready: ${assetSummary.meshCount} mesh, ${assetSummary.primitiveCount} primitive`
-          });
-          setAircraftModelStatus('ready');
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown aircraft model error';
-        console.warn('Aircraft model asset is unavailable; falling back to dots.', error);
-        if (!isCancelled) {
-          setAircraftModelDiagnostics((diagnostics) => ({
-            fetchStatus: diagnostics.fetchStatus === 'not-started' ? 'network-error' : diagnostics.fetchStatus,
-            drawStatus: 'error',
-            byteSize: diagnostics.byteSize,
-            message
-          }));
-          setAircraftModelStatus('failed');
-        }
-      }
-    }
-
-    checkAircraftModel();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -497,43 +276,22 @@ export function FlightMap({
     }
 
     const now = window.performance.now();
-    const orbitEnabled = activeSettings.orbitEnabled;
     let bearing = activeMap.getBearing();
 
-    if (orbitEnabled) {
-      if (orbitStartedAtRef.current === null || orbitStartBearingRef.current === null) {
-        orbitStartedAtRef.current = now;
-        orbitStartBearingRef.current =
-          activeMode === 'chase' && hasHeading(activeFlight) ? activeFlight.headingDeg : activeMap.getBearing();
-      }
-
-      const orbitStartBearing = orbitStartBearingRef.current;
-      const elapsedSeconds = (now - orbitStartedAtRef.current) / 1000;
-      bearing =
-        orbitStartBearing +
-        elapsedSeconds * getOrbitDegreesPerSecond(activeSettings.orbitSpeed);
-    } else if (activeMode === 'chase' && hasHeading(activeFlight)) {
+    if (activeMode === 'chase' && hasHeading(activeFlight)) {
       bearing = activeFlight.headingDeg;
     }
 
     lastCameraUpdateRef.current = now;
     activeMap.easeTo({
       center: [activeFlight.lon, activeFlight.lat],
-      zoom: activeMode === 'chase' ? 10 : 8.8,
-      pitch: activeMode === 'chase' ? 65 : orbitEnabled ? 52 : 42,
+      pitch: activeMode === 'chase' ? 65 : 42,
       bearing,
       offset: getCameraOffset(activeFlight, activeSettings.framing),
-      duration: durationMs ?? (orbitEnabled ? minOrbitUpdateMs : activeMode === 'chase' ? 800 : 650),
+      duration: durationMs ?? (activeMode === 'chase' ? 800 : 650),
       essential: true
     });
   }
-
-  useEffect(() => {
-    if (cameraMode === 'free' || !cameraSettings.orbitEnabled) {
-      orbitStartedAtRef.current = null;
-      orbitStartBearingRef.current = null;
-    }
-  }, [cameraMode, cameraSettings.orbitEnabled]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -542,7 +300,7 @@ export function FlightMap({
       return;
     }
 
-    const minUpdateMs = cameraSettings.orbitEnabled ? minOrbitUpdateMs : minCameraUpdateMs;
+    const minUpdateMs = minCameraUpdateMs;
     const elapsedMs = window.performance.now() - lastCameraUpdateRef.current;
     if (elapsedMs >= minUpdateMs) {
       easeSelectedCamera();
@@ -562,35 +320,6 @@ export function FlightMap({
     };
   }, [cameraMode, cameraSettings, selectedFlight]);
 
-  useEffect(() => {
-    if (!orbitIsActive) {
-      if (orbitFrameRef.current) {
-        window.cancelAnimationFrame(orbitFrameRef.current);
-        orbitFrameRef.current = null;
-      }
-      return;
-    }
-
-    function tick() {
-      const now = window.performance.now();
-
-      if (now - lastCameraUpdateRef.current >= minOrbitUpdateMs) {
-        easeSelectedCamera(minOrbitUpdateMs);
-      }
-
-      orbitFrameRef.current = window.requestAnimationFrame(tick);
-    }
-
-    orbitFrameRef.current = window.requestAnimationFrame(tick);
-
-    return () => {
-      if (orbitFrameRef.current) {
-        window.cancelAnimationFrame(orbitFrameRef.current);
-        orbitFrameRef.current = null;
-      }
-    };
-  }, [orbitIsActive]);
-
   return (
     <div className="map-wrap">
       <div ref={containerRef} className="map-canvas" />
@@ -604,48 +333,6 @@ export function FlightMap({
       <div className="visual-mode-badge">
         <span>Aircraft Style</span>
         <strong>{effectiveVisualMode}</strong>
-        {fallbackReason !== 'none' ? <small>{fallbackReason}</small> : null}
-      </div>
-      <div className="model-diagnostics" aria-label="Aircraft model diagnostics">
-        <div className="diagnostic-heading">
-          <span>Model Diagnostics</span>
-          <strong>{aircraftModelStatus}</strong>
-        </div>
-        <dl>
-          <div>
-            <dt>Asset URL</dt>
-            <dd>{aircraftModelUrl}</dd>
-          </div>
-          <div>
-            <dt>Fetch</dt>
-            <dd>{aircraftModelDiagnostics.fetchStatus}</dd>
-          </div>
-          <div>
-            <dt>Draw</dt>
-            <dd>{aircraftModelDiagnostics.drawStatus}</dd>
-          </div>
-          <div>
-            <dt>Bytes</dt>
-            <dd>{aircraftModelDiagnostics.byteSize === null ? 'unknown' : formatNumber(aircraftModelDiagnostics.byteSize)}</dd>
-          </div>
-          <div>
-            <dt>Layer count</dt>
-            <dd>{formatNumber(modelLayerActiveCount)}</dd>
-          </div>
-          <div>
-            <dt>Current</dt>
-            <dd>{aircraftVisualMode}</dd>
-          </div>
-          <div>
-            <dt>Effective</dt>
-            <dd>{effectiveVisualMode}</dd>
-          </div>
-          <div>
-            <dt>Fallback</dt>
-            <dd>{fallbackReason}</dd>
-          </div>
-        </dl>
-        {aircraftModelDiagnostics.message ? <p>{aircraftModelDiagnostics.message}</p> : null}
       </div>
       <div className="camera-control" aria-label="Camera mode">
         <div className="camera-control-header">
@@ -664,53 +351,6 @@ export function FlightMap({
               {mode}
             </button>
           ))}
-        </div>
-        <div className="camera-subsection">
-          <label className={selectedFlight && cameraMode !== 'free' ? 'camera-toggle' : 'camera-toggle disabled'}>
-            <input
-              checked={cameraSettings.orbitEnabled}
-              disabled={!selectedFlight || cameraMode === 'free'}
-              onChange={(event) =>
-                onCameraSettingsChange((settings) => ({
-                  ...settings,
-                  orbitEnabled: event.target.checked
-                }))
-              }
-              type="checkbox"
-            />
-            <span>Orbit</span>
-          </label>
-          <div className="camera-buttons two">
-            {(['slow', 'medium'] as const).map((speed) => (
-              <button
-                aria-pressed={cameraSettings.orbitSpeed === speed}
-                className={cameraSettings.orbitSpeed === speed ? 'camera-button active' : 'camera-button'}
-                disabled={!cameraSettings.orbitEnabled || !selectedFlight || cameraMode === 'free'}
-                key={speed}
-                onClick={() => onCameraSettingsChange((settings) => ({ ...settings, orbitSpeed: speed }))}
-                type="button"
-              >
-                {speed}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="camera-subsection">
-          <span className="camera-label">Framing</span>
-          <div className="camera-buttons">
-            {(['center', 'lookAhead', 'lowerThird'] as const).map((framing) => (
-              <button
-                aria-pressed={cameraSettings.framing === framing}
-                className={cameraSettings.framing === framing ? 'camera-button active' : 'camera-button'}
-                disabled={!selectedFlight || cameraMode === 'free'}
-                key={framing}
-                onClick={() => onCameraSettingsChange((settings) => ({ ...settings, framing }))}
-                type="button"
-              >
-                {framing === 'lookAhead' ? 'look ahead' : framing === 'lowerThird' ? 'lower third' : framing}
-              </button>
-            ))}
-          </div>
         </div>
         {cameraNeedsSelection ? (
           <p className="camera-note">Select an aircraft to activate {cameraMode} camera.</p>

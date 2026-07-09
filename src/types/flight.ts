@@ -34,7 +34,7 @@ export type FlightState = FlightPositionUpdate & {
 
 export type FlightDataSource = 'mock' | 'airplanes-live' | 'stress';
 
-export type AircraftVisualMode = 'dots' | 'models' | 'hybrid' | 'proof';
+export type AircraftVisualMode = 'dots' | 'models' | 'hybrid';
 
 export type ScaleMetrics = {
   ingestUpdatesPerSec: number;

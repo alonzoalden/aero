@@ -17,8 +17,6 @@ type OperationsPanelProps = {
   onSelectFlight: (flightId: string) => void;
 };
 
-const aircraftModelThreshold = 300;
-
 export function OperationsPanel({
   alerts,
   aircraftVisualMode,
@@ -31,7 +29,6 @@ export function OperationsPanel({
   onSelectFlight
 }: OperationsPanelProps) {
   const isStressMode = serverStatus?.source === 'stress';
-  const modelFallbackIsActive = aircraftVisualMode === 'models' && flights.length > aircraftModelThreshold;
   const visibleFlights = isStressMode ? flights.slice(0, 80) : flights;
   const hiddenFlightCount = Math.max(0, flights.length - visibleFlights.length);
   const scaleMetrics = serverStatus?.scaleMetrics;
@@ -106,7 +103,7 @@ export function OperationsPanel({
           <strong>{aircraftVisualMode}</strong>
         </div>
         <div className="mode-segment" aria-label="Aircraft visual mode">
-          {(['dots', 'models', 'hybrid', 'proof'] as const).map((mode) => (
+          {(['dots', 'models', 'hybrid'] as const).map((mode) => (
             <button
               aria-pressed={aircraftVisualMode === mode}
               className={aircraftVisualMode === mode ? 'mode-button active' : 'mode-button'}
@@ -119,15 +116,11 @@ export function OperationsPanel({
           ))}
         </div>
         <p className="muted mode-note">
-          {modelFallbackIsActive
-            ? `Models are capped at ${aircraftModelThreshold} aircraft for this demo, so the map is using dots.`
-            : aircraftVisualMode === 'hybrid'
-              ? 'Hybrid draws the selected aircraft as a dominant model while keeping small faint dots for context.'
-              : aircraftVisualMode === 'proof'
-                ? 'Proof draws one fixed ScenegraphLayer test aircraft near LAX with dots suppressed.'
-              : aircraftVisualMode === 'models'
-                ? 'Models use deck.gl ScenegraphLayer only when the count is below the demo safety cap.'
-                : 'Dots keep high-density and stress-mode views readable.'}
+          {aircraftVisualMode === 'hybrid'
+            ? 'Hybrid draws the selected aircraft as a dominant model while keeping small faint dots for context.'
+            : aircraftVisualMode === 'models'
+              ? 'Models render aircraft with deck.gl ScenegraphLayer.'
+              : 'Dots keep high-density and stress-mode views readable.'}
         </p>
       </section>
 
@@ -162,7 +155,7 @@ export function OperationsPanel({
           <p className="muted">
             {flights.length > 0
               ? 'The first aircraft is selected automatically; select another aircraft from the map or list.'
-              : 'Start the local backend to receive aircraft, or use proof mode to verify the local model.'}
+              : 'Start the local backend to receive aircraft.'}
           </p>
         )}
       </section>

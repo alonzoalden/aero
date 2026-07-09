@@ -13,11 +13,7 @@ export function FlightOpsDashboard() {
   const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
   const [aircraftVisualMode, setAircraftVisualMode] = useState<AircraftVisualMode>('hybrid');
   const [cameraMode, setCameraMode] = useState<CameraMode>('free');
-  const [cameraSettings, setCameraSettings] = useState<CameraSettings>({
-    orbitEnabled: false,
-    orbitSpeed: 'slow',
-    framing: 'center'
-  });
+  const [cameraSettings] = useState<CameraSettings>({ framing: 'center' });
   const effectiveSelectedFlightId =
     selectedFlightId && flightsById[selectedFlightId] ? selectedFlightId : flights[0]?.flightId ?? null;
   const selectedFlight = effectiveSelectedFlightId ? flightsById[effectiveSelectedFlightId] ?? null : null;
@@ -33,7 +29,6 @@ export function FlightOpsDashboard() {
           selectedFlight={selectedFlight}
           selectedFlightId={selectedFlight?.flightId ?? null}
           onCameraModeChange={setCameraMode}
-          onCameraSettingsChange={setCameraSettings}
           onSelectFlight={setSelectedFlightId}
         />
       </section>
