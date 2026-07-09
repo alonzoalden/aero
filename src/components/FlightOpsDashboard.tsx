@@ -4,19 +4,24 @@ import { useMemo, useState } from 'react';
 import { FlightMap } from '@/components/map/FlightMap';
 import { OperationsPanel } from '@/components/panels/OperationsPanel';
 import { useFlightStream } from '@/hooks/useFlightStream';
+import type { CameraMode } from '@/types/camera';
 
 export function FlightOpsDashboard() {
-  const { alerts, connectionStatus, flightsById, serverStatus } = useFlightStream();
+  const { alerts, connectionStatus, flightsById, frontendMetrics, serverStatus } = useFlightStream();
   const flights = useMemo(() => Object.values(flightsById), [flightsById]);
   const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
-  const selectedFlight = selectedFlightId ? flightsById[selectedFlightId] : flights[0] ?? null;
+  const [cameraMode, setCameraMode] = useState<CameraMode>('free');
+  const selectedFlight = selectedFlightId ? flightsById[selectedFlightId] ?? null : null;
 
   return (
     <main className="dashboard-shell">
       <section className="map-region" aria-label="Live flight map">
         <FlightMap
+          cameraMode={cameraMode}
           flights={flights}
+          selectedFlight={selectedFlight}
           selectedFlightId={selectedFlight?.flightId ?? null}
+          onCameraModeChange={setCameraMode}
           onSelectFlight={setSelectedFlightId}
         />
       </section>
@@ -24,6 +29,7 @@ export function FlightOpsDashboard() {
         alerts={alerts}
         connectionStatus={connectionStatus}
         flights={flights}
+        frontendMetrics={frontendMetrics}
         serverStatus={serverStatus}
         selectedFlight={selectedFlight}
         onSelectFlight={setSelectedFlightId}

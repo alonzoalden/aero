@@ -9,7 +9,7 @@ export type FlightPositionUpdate = {
   verticalRateFpm?: number | null;
   origin?: string | null;
   destination?: string | null;
-  source: 'mock' | 'airplanes-live';
+  source: FlightDataSource;
   lastSeenSeconds?: number | null;
   timestamp: string;
 };
@@ -32,7 +32,18 @@ export type FlightState = FlightPositionUpdate & {
   track: FlightTrackPoint[];
 };
 
-export type FlightDataSource = 'mock' | 'airplanes-live';
+export type FlightDataSource = 'mock' | 'airplanes-live' | 'stress';
+
+export type ScaleMetrics = {
+  ingestUpdatesPerSec: number;
+  webSocketMessagesPerSec: number;
+  aircraftUpdatesBroadcastPerSec: number;
+  connectedClients: number;
+  activeAircraftCount: number;
+  lastBroadcastTimestamp: string | null;
+  coalescedUpdateCount: number;
+  sequence: number;
+};
 
 export type FlightServerStatus = {
   source: FlightDataSource;
@@ -40,24 +51,26 @@ export type FlightServerStatus = {
   aircraftCount: number;
   lastPollTimestamp: string | null;
   lastBroadcastTimestamp: string | null;
+  scaleMetrics?: ScaleMetrics;
+};
+
+type FlightStreamEnvelope = {
+  alerts: FlightAlert[];
+  status: FlightServerStatus;
+  sequence?: number;
+  serverTimestamp?: string;
 };
 
 export type FlightStreamMessage =
-  | {
+  | (FlightStreamEnvelope & {
       type: 'snapshot';
       flights: FlightPositionUpdate[];
-      alerts: FlightAlert[];
-      status: FlightServerStatus;
-    }
-  | {
+    })
+  | (FlightStreamEnvelope & {
       type: 'position';
       flight: FlightPositionUpdate;
-      alerts: FlightAlert[];
-      status: FlightServerStatus;
-    }
-  | {
+    })
+  | (FlightStreamEnvelope & {
       type: 'batch';
       flights: FlightPositionUpdate[];
-      alerts: FlightAlert[];
-      status: FlightServerStatus;
-    };
+    });

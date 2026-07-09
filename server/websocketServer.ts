@@ -29,11 +29,14 @@ export function createWebSocketFlightServer({
 
   function broadcast(message: FlightStreamMessage) {
     const encoded = JSON.stringify(message);
+    let sentCount = 0;
     for (const client of webSocketServer.clients) {
       if (client.readyState === client.OPEN) {
         client.send(encoded);
+        sentCount += 1;
       }
     }
+    return sentCount;
   }
 
   return {

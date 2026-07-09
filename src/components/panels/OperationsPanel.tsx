@@ -2,13 +2,14 @@
 
 import { AltitudeChart } from '@/components/panels/AltitudeChart';
 import { formatNumber, formatRoute, formatTime } from '@/lib/format';
-import type { ConnectionStatus } from '@/hooks/useFlightStream';
+import type { ConnectionStatus, FrontendStreamMetrics } from '@/hooks/useFlightStream';
 import type { FlightAlert, FlightServerStatus, FlightState } from '@/types/flight';
 
 type OperationsPanelProps = {
   alerts: FlightAlert[];
   connectionStatus: ConnectionStatus;
   flights: FlightState[];
+  frontendMetrics: FrontendStreamMetrics;
   serverStatus: FlightServerStatus | null;
   selectedFlight: FlightState | null;
   onSelectFlight: (flightId: string) => void;
@@ -18,10 +19,16 @@ export function OperationsPanel({
   alerts,
   connectionStatus,
   flights,
+  frontendMetrics,
   serverStatus,
   selectedFlight,
   onSelectFlight
 }: OperationsPanelProps) {
+  const isStressMode = serverStatus?.source === 'stress';
+  const visibleFlights = isStressMode ? flights.slice(0, 80) : flights;
+  const hiddenFlightCount = Math.max(0, flights.length - visibleFlights.length);
+  const scaleMetrics = serverStatus?.scaleMetrics;
+
   return (
     <aside className="ops-panel">
       <header className="panel-header">
@@ -47,6 +54,44 @@ export function OperationsPanel({
           </strong>
         </div>
       </section>
+
+      {isStressMode ? (
+        <section className="panel-section scale-lab">
+          <h2>Scale Lab</h2>
+          <div className="detail-grid">
+            <span>Source</span>
+            <strong>{serverStatus.source}</strong>
+            <span>Aircraft</span>
+            <strong>{formatNumber(scaleMetrics?.activeAircraftCount ?? serverStatus.aircraftCount)}</strong>
+            <span>Clients</span>
+            <strong>{formatNumber(scaleMetrics?.connectedClients ?? serverStatus.connectedClients)}</strong>
+            <span>Ingest/sec</span>
+            <strong>{formatNumber(scaleMetrics?.ingestUpdatesPerSec)}</strong>
+            <span>WS msg/sec</span>
+            <strong>{formatNumber(scaleMetrics?.webSocketMessagesPerSec)}</strong>
+            <span>Broadcast/sec</span>
+            <strong>{formatNumber(scaleMetrics?.aircraftUpdatesBroadcastPerSec)}</strong>
+            <span>Received/sec</span>
+            <strong>{formatNumber(frontendMetrics.aircraftUpdatesReceivedPerSec)}</strong>
+            <span>Frontend msg/sec</span>
+            <strong>{formatNumber(frontendMetrics.receivedMessagesPerSec)}</strong>
+            <span>Approx FPS</span>
+            <strong>{formatNumber(frontendMetrics.renderFps)}</strong>
+            <span>Coalesced</span>
+            <strong>{formatNumber(scaleMetrics?.coalescedUpdateCount)}</strong>
+            <span>Sequence</span>
+            <strong>{formatNumber(frontendMetrics.lastSequence ?? scaleMetrics?.sequence)}</strong>
+            <span>Server time</span>
+            <strong>
+              {frontendMetrics.lastServerTimestamp
+                ? formatTime(frontendMetrics.lastServerTimestamp)
+                : scaleMetrics?.lastBroadcastTimestamp
+                  ? formatTime(scaleMetrics.lastBroadcastTimestamp)
+                  : 'unknown'}
+            </strong>
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel-section">
         <h2>Selected aircraft</h2>
@@ -76,7 +121,9 @@ export function OperationsPanel({
             <strong>{formatTime(selectedFlight.timestamp)}</strong>
           </div>
         ) : (
-          <p className="muted">Start the local backend to receive aircraft.</p>
+          <p className="muted">
+            {flights.length > 0 ? 'Select an aircraft from the map or list.' : 'Start the local backend to receive aircraft.'}
+          </p>
         )}
       </section>
 
@@ -86,8 +133,13 @@ export function OperationsPanel({
 
       <section className="panel-section">
         <h2>Active aircraft</h2>
+        {hiddenFlightCount > 0 ? (
+          <p className="muted list-summary">
+            Showing {visibleFlights.length} of {formatNumber(flights.length)} aircraft to keep the panel readable.
+          </p>
+        ) : null}
         <div className="flight-list">
-          {flights.map((flight) => (
+          {visibleFlights.map((flight) => (
             <button
               className={flight.flightId === selectedFlight?.flightId ? 'flight-row selected' : 'flight-row'}
               key={flight.flightId}
