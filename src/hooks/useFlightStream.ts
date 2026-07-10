@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { parseFlightStreamMessage } from '@/lib/flightStreamMessage';
 import { replaceFlights, upsertFlights } from '@/lib/flightState';
 import type {
   FlightAlert,
@@ -21,6 +22,8 @@ export type FrontendStreamMetrics = {
 };
 
 const socketUrl = process.env.NEXT_PUBLIC_FLIGHT_WS_URL ?? 'ws://localhost:8787';
+const reconnectBaseDelayMs = 500;
+const reconnectMaxDelayMs = 5000;
 
 export function useFlightStream() {
   const [flightsById, setFlightsById] = useState<Record<string, FlightState>>({});
@@ -43,8 +46,11 @@ export function useFlightStream() {
   const latestServerTimestamp = useRef<string | null>(null);
 
   useEffect(() => {
-    const socket = new WebSocket(socketUrl);
+    let socket: WebSocket | null = null;
     let fpsFrameId: number | null = null;
+    let reconnectTimerId: number | null = null;
+    let reconnectAttempt = 0;
+    let isActive = true;
 
     function flushMessages() {
       frameId.current = null;
@@ -87,11 +93,26 @@ export function useFlightStream() {
       fpsFrameId = window.requestAnimationFrame(measureFrame);
     }
 
-    socket.addEventListener('open', () => setConnectionStatus('open'));
-    socket.addEventListener('close', () => setConnectionStatus('closed'));
-    socket.addEventListener('error', () => setConnectionStatus('error'));
-    socket.addEventListener('message', (event) => {
-      const message = JSON.parse(event.data) as FlightStreamMessage;
+    function scheduleReconnect() {
+      if (!isActive || reconnectTimerId) {
+        return;
+      }
+
+      const delay = Math.min(reconnectBaseDelayMs * 2 ** reconnectAttempt, reconnectMaxDelayMs);
+      reconnectAttempt += 1;
+      reconnectTimerId = window.setTimeout(() => {
+        reconnectTimerId = null;
+        connect();
+      }, delay);
+    }
+
+    function handleMessage(event: MessageEvent) {
+      const message = parseFlightStreamMessage(event.data);
+
+      if (!message) {
+        return;
+      }
+
       pendingMessages.current.push(message);
       receivedMessagesThisSecond.current += 1;
       aircraftUpdatesThisSecond.current += message.type === 'position' ? 1 : message.flights.length;
@@ -100,8 +121,34 @@ export function useFlightStream() {
 
       // Batch socket bursts into a paint frame; deck.gl owns the high-frequency drawing work.
       frameId.current ??= window.requestAnimationFrame(flushMessages);
-    });
+    }
 
+    function connect() {
+      if (!isActive) {
+        return;
+      }
+
+      socket = new WebSocket(socketUrl);
+      setConnectionStatus('connecting');
+      socket.addEventListener('open', () => {
+        reconnectAttempt = 0;
+        setConnectionStatus('open');
+      });
+      socket.addEventListener('close', () => {
+        if (!isActive) {
+          return;
+        }
+
+        setConnectionStatus('closed');
+        scheduleReconnect();
+      });
+      socket.addEventListener('error', () => {
+        setConnectionStatus('error');
+      });
+      socket.addEventListener('message', handleMessage);
+    }
+
+    connect();
     fpsFrameId = window.requestAnimationFrame(measureFrame);
     const metricsIntervalId = window.setInterval(() => {
       setFrontendMetrics({
@@ -117,7 +164,11 @@ export function useFlightStream() {
     }, 1000);
 
     return () => {
-      socket.close();
+      isActive = false;
+      socket?.close();
+      if (reconnectTimerId) {
+        window.clearTimeout(reconnectTimerId);
+      }
       if (frameId.current) {
         window.cancelAnimationFrame(frameId.current);
       }

@@ -171,6 +171,7 @@ export function FlightMap({
   const [hovered, setHovered] = useState<FlightState | null>(null);
   const isDense = flights.length > 250;
   const selectedBasemap = basemapStyles.find((style) => style.id === basemapId) ?? basemapStyles[0];
+  const initialBasemapRef = useRef(selectedBasemap);
   const aircraftLabelStyle = useMemo(
     () =>
       basemapId === 'dark'
@@ -384,7 +385,7 @@ export function FlightMap({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: selectedBasemap.createStyle(),
+      style: initialBasemapRef.current.createStyle(),
       center: [-118.4085, 33.9416],
       zoom: 7,
       attributionControl: false
@@ -477,7 +478,7 @@ export function FlightMap({
       overlayRef.current = null;
       mapRef.current = null;
     };
-  }, [releaseCameraToFree, selectedBasemap]);
+  }, [releaseCameraToFree]);
 
   useEffect(() => {
     const map = mapRef.current;

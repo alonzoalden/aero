@@ -43,7 +43,6 @@ export function OperationsPanel({
   onSelectFlight
 }: OperationsPanelProps) {
   const isStressMode = serverStatus?.source === 'stress';
-  const isDemoOpsMode = serverStatus?.source === 'demo-ops';
   const visibleFlights = isStressMode ? flights.slice(0, 80) : flights;
   const hiddenFlightCount = Math.max(0, flights.length - visibleFlights.length);
   const scaleMetrics = serverStatus?.scaleMetrics;
@@ -65,25 +64,6 @@ export function OperationsPanel({
         </div>
         <span className={`status-pill status-${connectionStatus}`}>{connectionStatus}</span>
       </header>
-
-      <section className="panel-section">
-        <h2>Stream status</h2>
-        <div className="detail-grid">
-          <span>Source</span>
-          <strong>{serverStatus?.source ?? 'unknown'}</strong>
-          <span>Aircraft</span>
-          <strong>{serverStatus?.aircraftCount ?? flights.length}</strong>
-          <span>Clients</span>
-          <strong>{serverStatus?.connectedClients ?? 'unknown'}</strong>
-          <span>Server update</span>
-          <strong>
-            {serverStatus?.lastBroadcastTimestamp ? formatTime(serverStatus.lastBroadcastTimestamp) : 'unknown'}
-          </strong>
-        </div>
-        {isDemoOpsMode ? (
-          <p className="muted source-note">Demo Ops is synthetic data designed to show frontend/live-ops behavior.</p>
-        ) : null}
-      </section>
 
       <section className="panel-section">
         <div className="section-heading-row">
