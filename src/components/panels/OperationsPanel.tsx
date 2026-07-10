@@ -2,10 +2,11 @@
 
 import { AltitudeChart } from '@/components/panels/AltitudeChart';
 import { getDisplayHeadingDeg } from '@/lib/flightHeading';
+import { basemapStyles } from '@/lib/basemaps';
 import { formatNumber, formatRoute, formatTime } from '@/lib/format';
 import type { ConnectionStatus, FrontendStreamMetrics } from '@/hooks/useFlightStream';
+import type { BasemapId } from '@/lib/basemaps';
 import type {
-  AircraftVisualMode,
   FlightAlert,
   FlightServerStatus,
   FlightState,
@@ -14,7 +15,7 @@ import type {
 
 type OperationsPanelProps = {
   alerts: FlightAlert[];
-  aircraftVisualMode: AircraftVisualMode;
+  basemapId: BasemapId;
   connectionStatus: ConnectionStatus;
   flights: FlightState[];
   frontendMetrics: FrontendStreamMetrics;
@@ -22,14 +23,14 @@ type OperationsPanelProps = {
   selectedFlight: FlightState | null;
   sourceSwitchError: string | null;
   switchingSource: RuntimeSwitchableFlightDataSource | null;
-  onAircraftVisualModeChange: (mode: AircraftVisualMode) => void;
+  onBasemapChange: (basemapId: BasemapId) => void;
   onSourceChange: (source: RuntimeSwitchableFlightDataSource) => void;
   onSelectFlight: (flightId: string) => void;
 };
 
 export function OperationsPanel({
   alerts,
-  aircraftVisualMode,
+  basemapId,
   connectionStatus,
   flights,
   frontendMetrics,
@@ -37,7 +38,7 @@ export function OperationsPanel({
   selectedFlight,
   sourceSwitchError,
   switchingSource,
-  onAircraftVisualModeChange,
+  onBasemapChange,
   onSourceChange,
   onSelectFlight
 }: OperationsPanelProps) {
@@ -48,6 +49,7 @@ export function OperationsPanel({
   const scaleMetrics = serverStatus?.scaleMetrics;
   const selectedHeadingDeg = selectedFlight ? getDisplayHeadingDeg(selectedFlight) : null;
   const sourceOptions = serverStatus?.availableSources ?? [];
+  const selectedBasemap = basemapStyles.find((style) => style.id === basemapId) ?? basemapStyles[0];
   const sourceNote =
     serverStatus?.sourceDescription ??
     (serverStatus?.source === 'airplanes-live'
@@ -110,6 +112,30 @@ export function OperationsPanel({
         {sourceSwitchError ? <p className="source-error">{sourceSwitchError}</p> : null}
       </section>
 
+      <section className="panel-section">
+        <div className="section-heading-row">
+          <h2>Basemap</h2>
+          <strong>{selectedBasemap.label}</strong>
+        </div>
+        <div className="basemap-control" aria-label="Basemap style">
+          <div className="basemap-buttons">
+            {basemapStyles.map((style) => (
+              <button
+                aria-pressed={basemapId === style.id}
+                className={basemapId === style.id ? 'basemap-button active' : 'basemap-button'}
+                key={style.id}
+                onClick={() => onBasemapChange(style.id)}
+                title={style.description}
+                type="button"
+              >
+                {style.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="muted source-note">{selectedBasemap.description}</p>
+      </section>
+
       {isStressMode ? (
         <section className="panel-section scale-lab">
           <h2>Scale Lab</h2>
@@ -147,33 +173,6 @@ export function OperationsPanel({
           </div>
         </section>
       ) : null}
-
-      <section className="panel-section">
-        <div className="section-heading-row">
-          <h2>Aircraft Style</h2>
-          <strong>{aircraftVisualMode}</strong>
-        </div>
-        <div className="mode-segment" aria-label="Aircraft visual mode">
-          {(['dots', 'models', 'hybrid'] as const).map((mode) => (
-            <button
-              aria-pressed={aircraftVisualMode === mode}
-              className={aircraftVisualMode === mode ? 'mode-button active' : 'mode-button'}
-              key={mode}
-              onClick={() => onAircraftVisualModeChange(mode)}
-              type="button"
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
-        <p className="muted mode-note">
-          {aircraftVisualMode === 'hybrid'
-            ? 'Hybrid draws the selected aircraft as a dominant model while keeping small faint dots for context.'
-            : aircraftVisualMode === 'models'
-              ? 'Models render aircraft with deck.gl ScenegraphLayer.'
-              : 'Dots keep high-density and stress-mode views readable.'}
-        </p>
-      </section>
 
       <section className="panel-section">
         <h2>Selected aircraft</h2>

@@ -4,15 +4,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlightMap } from '@/components/map/FlightMap';
 import { OperationsPanel } from '@/components/panels/OperationsPanel';
 import { useFlightStream } from '@/hooks/useFlightStream';
+import { defaultBasemapId } from '@/lib/basemaps';
 import { flightApiUrl } from '@/lib/flightApi';
+import type { BasemapId } from '@/lib/basemaps';
 import type { CameraMode, CameraSettings } from '@/types/camera';
-import type { AircraftVisualMode, FlightServerStatus, RuntimeSwitchableFlightDataSource } from '@/types/flight';
+import type { FlightServerStatus, RuntimeSwitchableFlightDataSource } from '@/types/flight';
 
 export function FlightOpsDashboard() {
   const { alerts, connectionStatus, flightsById, frontendMetrics, serverStatus } = useFlightStream();
   const flights = useMemo(() => Object.values(flightsById), [flightsById]);
   const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
-  const [aircraftVisualMode, setAircraftVisualMode] = useState<AircraftVisualMode>('hybrid');
+  const [basemapId, setBasemapId] = useState<BasemapId>(defaultBasemapId);
   const [cameraMode, setCameraMode] = useState<CameraMode>('free');
   const [cameraSettings] = useState<CameraSettings>({ framing: 'center' });
   const [sourceSwitchError, setSourceSwitchError] = useState<string | null>(null);
@@ -65,10 +67,9 @@ export function FlightOpsDashboard() {
         <FlightMap
           cameraMode={cameraMode}
           cameraSettings={cameraSettings}
-          aircraftVisualMode={aircraftVisualMode}
+          basemapId={basemapId}
           flights={flights}
           selectedFlight={selectedFlight}
-          selectedFlightId={selectedFlight?.flightId ?? null}
           onCameraModeChange={setCameraMode}
           onSelectFlight={setSelectedFlightId}
         />
@@ -80,10 +81,10 @@ export function FlightOpsDashboard() {
         frontendMetrics={frontendMetrics}
         serverStatus={serverStatus}
         selectedFlight={selectedFlight}
-        aircraftVisualMode={aircraftVisualMode}
+        basemapId={basemapId}
         sourceSwitchError={sourceSwitchError}
         switchingSource={switchingSource}
-        onAircraftVisualModeChange={setAircraftVisualMode}
+        onBasemapChange={setBasemapId}
         onSourceChange={handleSourceChange}
         onSelectFlight={setSelectedFlightId}
       />

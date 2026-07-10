@@ -43,8 +43,6 @@ export type FlightSourceOption = {
   pollIntervalMs: number;
 };
 
-export type AircraftVisualMode = 'dots' | 'models' | 'hybrid';
-
 export type ScaleMetrics = {
   ingestUpdatesPerSec: number;
   webSocketMessagesPerSec: number;
