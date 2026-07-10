@@ -46,7 +46,25 @@ const flights: SimFlight[] = [
   createFlight('DAL983', airports.LAX, airports.LAS, 0.54, 360),
   createFlight('ASA611', airports.SAN, airports.SFO, 0.38, 390),
   createFlight('JBU204', airports.PHX, airports.LAX, 0.73, 410),
-  createFlight('SWA271', airports.ONT, airports.LAS, 0.18, 310)
+  createFlight('SWA271', airports.ONT, airports.LAS, 0.18, 310),
+  createFlight('SKW732', airports.SFO, airports.SAN, 0.12, 345),
+  createFlight('NKS419', airports.LAS, airports.LAX, 0.44, 385),
+  createFlight('FFT908', airports.PHX, airports.SFO, 0.31, 405),
+  createFlight('AAL287', airports.LAX, airports.PHX, 0.66, 395),
+  createFlight('UAL119', airports.SFO, airports.LAS, 0.58, 415),
+  createFlight('DAL774', airports.SAN, airports.LAX, 0.22, 285),
+  createFlight('ASA506', airports.SFO, airports.ONT, 0.81, 375),
+  createFlight('JBU631', airports.LAS, airports.SAN, 0.49, 350),
+  createFlight('SWA884', airports.PHX, airports.ONT, 0.09, 330),
+  createFlight('SKW245', airports.ONT, airports.SFO, 0.35, 340),
+  createFlight('NKS702', airports.LAX, airports.SAN, 0.61, 300),
+  createFlight('FFT312', airports.LAS, airports.PHX, 0.27, 325),
+  createFlight('AAL915', airports.SFO, airports.PHX, 0.76, 425),
+  createFlight('UAL683', airports.SAN, airports.LAS, 0.15, 355),
+  createFlight('DAL430', airports.ONT, airports.LAX, 0.52, 260),
+  createFlight('ASA178', airports.LAX, airports.ONT, 0.41, 255),
+  createFlight('JBU957', airports.PHX, airports.SAN, 0.68, 390),
+  createFlight('SWA536', airports.LAS, airports.SFO, 0.88, 400)
 ];
 
 const alerts: FlightAlert[] = [

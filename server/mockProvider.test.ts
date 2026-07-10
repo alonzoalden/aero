@@ -19,6 +19,7 @@ test('mock routes stay regional enough for the default demo', async () => {
   const provider = createMockProvider();
   const { flights } = await provider.getSnapshot();
 
+  assert.equal(flights.length, 24);
   assert.ok(flights.every((flight) => flight.source === 'mock'));
   assert.ok(flights.every((flight) => Number.isFinite(flight.lat) && Number.isFinite(flight.lon)));
   assert.ok(flights.every((flight) => Number.isFinite(flight.headingDeg)));

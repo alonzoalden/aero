@@ -659,7 +659,9 @@ export function FlightMap({
       }
       cameraZoomingRef.current = false;
       cameraTargetRef.current = null;
-      previousCameraModeRef.current = cameraMode;
+      if (cameraMode === 'free') {
+        previousCameraModeRef.current = cameraMode;
+      }
       return;
     }
 

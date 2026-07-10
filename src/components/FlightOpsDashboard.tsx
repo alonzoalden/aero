@@ -8,7 +8,23 @@ import { defaultBasemapId } from '@/lib/basemaps';
 import { flightApiUrl } from '@/lib/flightApi';
 import type { BasemapId } from '@/lib/basemaps';
 import type { CameraMode, CameraSettings } from '@/types/camera';
-import type { FlightServerStatus, RuntimeSwitchableFlightDataSource } from '@/types/flight';
+import type { FlightServerStatus, FlightState, RuntimeSwitchableFlightDataSource } from '@/types/flight';
+
+const initialMapViewportBounds = {
+  minLat: 32.2,
+  maxLat: 35.5,
+  minLon: -121.2,
+  maxLon: -115.6
+};
+
+function isInsideInitialMapViewport(flight: FlightState) {
+  return (
+    flight.lat >= initialMapViewportBounds.minLat &&
+    flight.lat <= initialMapViewportBounds.maxLat &&
+    flight.lon >= initialMapViewportBounds.minLon &&
+    flight.lon <= initialMapViewportBounds.maxLon
+  );
+}
 
 export function FlightOpsDashboard() {
   const { alerts, connectionStatus, flightsById, frontendMetrics, serverStatus } = useFlightStream();
@@ -20,8 +36,12 @@ export function FlightOpsDashboard() {
   const [sourceSwitchError, setSourceSwitchError] = useState<string | null>(null);
   const [switchingSource, setSwitchingSource] = useState<RuntimeSwitchableFlightDataSource | null>(null);
   const previousSourceRef = useRef(serverStatus?.source ?? null);
+  const defaultSelectedFlight = useMemo(
+    () => flights.find(isInsideInitialMapViewport) ?? flights[0] ?? null,
+    [flights]
+  );
   const effectiveSelectedFlightId =
-    selectedFlightId && flightsById[selectedFlightId] ? selectedFlightId : flights[0]?.flightId ?? null;
+    selectedFlightId && flightsById[selectedFlightId] ? selectedFlightId : defaultSelectedFlight?.flightId ?? null;
   const selectedFlight = effectiveSelectedFlightId ? flightsById[effectiveSelectedFlightId] ?? null : null;
 
   useEffect(() => {
