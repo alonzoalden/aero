@@ -22,7 +22,8 @@ export function createWebSocketFlightServer({
       type: 'snapshot',
       flights: getSnapshot(),
       alerts: getAlerts(),
-      status: getStatus()
+      status: getStatus(),
+      serverTimestamp: new Date().toISOString()
     };
     socket.send(JSON.stringify(message));
   });

@@ -46,3 +46,33 @@ test('parseFlightStreamMessage rejects structurally invalid stream frames', () =
   assert.equal(parseFlightStreamMessage(JSON.stringify({ ...validMessage, flights: [{ ...validMessage.flights[0], lat: 'bad' }] })), null);
   assert.equal(parseFlightStreamMessage(JSON.stringify({ ...validMessage, type: 'unknown' })), null);
 });
+
+test('parseFlightStreamMessage accepts optional motion metadata and rejects malformed vectors', () => {
+  const flight = validMessage.flights[0];
+  const withMotion = {
+    ...validMessage,
+    flights: [
+      {
+        ...flight,
+        observedAt: '2026-07-09T11:59:59.000Z',
+        motion: {
+          northVelocityKts: 100,
+          eastVelocityKts: 200,
+          verticalRateFpm: null,
+          validUntil: '2026-07-09T12:00:20.000Z'
+        }
+      }
+    ]
+  };
+
+  assert.deepEqual(parseFlightStreamMessage(JSON.stringify(withMotion)), withMotion);
+  assert.equal(
+    parseFlightStreamMessage(
+      JSON.stringify({
+        ...withMotion,
+        flights: [{ ...withMotion.flights[0], motion: { ...withMotion.flights[0].motion, eastVelocityKts: 'bad' } }]
+      })
+    ),
+    null
+  );
+});

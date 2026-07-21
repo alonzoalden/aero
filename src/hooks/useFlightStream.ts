@@ -30,6 +30,7 @@ export function useFlightStream() {
   const [alerts, setAlerts] = useState<FlightAlert[]>([]);
   const [serverStatus, setServerStatus] = useState<FlightServerStatus | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
+  const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
   const [frontendMetrics, setFrontendMetrics] = useState<FrontendStreamMetrics>({
     receivedMessagesPerSec: 0,
     aircraftUpdatesReceivedPerSec: 0,
@@ -85,6 +86,14 @@ export function useFlightStream() {
       const latestStatus = batch.at(-1)?.status;
       if (latestStatus) {
         setServerStatus(latestStatus);
+      }
+
+      const serverTimestamp = batch.at(-1)?.serverTimestamp;
+      if (serverTimestamp) {
+        const serverTimestampMs = Date.parse(serverTimestamp);
+        if (Number.isFinite(serverTimestampMs)) {
+          setServerTimeOffsetMs(serverTimestampMs - Date.now());
+        }
       }
     }
 
@@ -179,5 +188,5 @@ export function useFlightStream() {
     };
   }, []);
 
-  return { alerts, connectionStatus, flightsById, frontendMetrics, serverStatus };
+  return { alerts, connectionStatus, flightsById, frontendMetrics, serverStatus, serverTimeOffsetMs };
 }

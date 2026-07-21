@@ -1,3 +1,10 @@
+export type FlightMotion = {
+  northVelocityKts: number;
+  eastVelocityKts: number;
+  verticalRateFpm: number | null;
+  validUntil: string;
+};
+
 export type FlightPositionUpdate = {
   flightId: string;
   callsign: string;
@@ -11,6 +18,8 @@ export type FlightPositionUpdate = {
   destination?: string | null;
   source: FlightDataSource;
   lastSeenSeconds?: number | null;
+  observedAt?: string;
+  motion?: FlightMotion;
   timestamp: string;
 };
 

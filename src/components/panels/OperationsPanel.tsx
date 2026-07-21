@@ -178,8 +178,8 @@ export function OperationsPanel({
                 ? 'unknown'
                 : `${formatNumber(selectedFlight.lastSeenSeconds)} sec`}
             </strong>
-            <span>Updated</span>
-            <strong>{formatTime(selectedFlight.timestamp)}</strong>
+            <span>Observed</span>
+            <strong>{formatTime(selectedFlight.observedAt ?? selectedFlight.timestamp)}</strong>
           </div>
         ) : (
           <p className="muted">

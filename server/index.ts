@@ -353,7 +353,9 @@ function getSourceDescription(source: FlightDataSource) {
 }
 
 function createRuntimeProvider(source: RuntimeSwitchableFlightDataSource): AircraftProvider {
-  return source === 'airplanes-live' ? createAirplanesLiveProvider(config.airplanesLiveUrl) : createMockProvider();
+  return source === 'airplanes-live'
+    ? createAirplanesLiveProvider(config.airplanesLiveUrl, config.airplanesLivePollMs)
+    : createMockProvider();
 }
 
 function isRuntimeSwitchableSource(source: FlightDataSource): source is RuntimeSwitchableFlightDataSource {

@@ -113,6 +113,18 @@ button {
   font-weight: 700;
 }
 
+.map-title .prediction-badge {
+  width: fit-content;
+  margin-top: 5px;
+  border: 1px solid rgb(56 189 248 / 42%);
+  border-radius: 999px;
+  background: rgb(14 116 144 / 24%);
+  color: #bae6fd;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .map-title small,
 .muted,
 .flight-row small {
@@ -163,6 +175,16 @@ button {
   width: 220px;
   padding: 12px;
   font-size: 13px;
+}
+
+.prediction-status {
+  margin-top: 4px;
+  color: #bae6fd;
+  font-weight: 600;
+}
+
+.prediction-status.status-stale {
+  color: #fbbf24;
 }
 
 .camera-control {

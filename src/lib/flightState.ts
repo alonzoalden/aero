@@ -31,17 +31,24 @@ export function replaceFlights(updates: FlightPositionUpdate[]): Record<string, 
 }
 
 function mergeFlight(previous: FlightState | undefined, update: FlightPositionUpdate): FlightState {
+  const observedTimestamp = update.observedAt ?? update.timestamp;
   const trackPoint = {
     lat: update.lat,
     lon: update.lon,
     altitudeFt: update.altitudeFt,
     groundSpeedKts: update.groundSpeedKts,
     headingDeg: update.headingDeg,
-    timestamp: update.timestamp
+    timestamp: observedTimestamp
   };
+  const previousTrack = previous?.track ?? [];
+  const latestTrackPoint = previousTrack.at(-1);
+  const track =
+    latestTrackPoint?.timestamp === observedTimestamp
+      ? previousTrack
+      : [...previousTrack, trackPoint].slice(-maxTrackPoints);
 
   return {
     ...update,
-    track: [...(previous?.track ?? []), trackPoint].slice(-maxTrackPoints)
+    track
   };
 }

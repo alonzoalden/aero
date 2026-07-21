@@ -9,16 +9,19 @@ export class FlightHistoryStore {
   upsertMany(flights: FlightPositionUpdate[]) {
     for (const flight of flights) {
       this.latestAircraft.set(flight.flightId, flight);
+      const observedTimestamp = flight.observedAt ?? flight.timestamp;
       const historyPoint: FlightTrackPoint = {
         lat: flight.lat,
         lon: flight.lon,
         altitudeFt: flight.altitudeFt,
         groundSpeedKts: flight.groundSpeedKts,
         headingDeg: flight.headingDeg,
-        timestamp: flight.timestamp
+        timestamp: observedTimestamp
       };
       const history = this.historyByAircraft.get(flight.flightId) ?? [];
-      this.historyByAircraft.set(flight.flightId, [...history, historyPoint].slice(-maxHistoryPoints));
+      if (history.at(-1)?.timestamp !== observedTimestamp) {
+        this.historyByAircraft.set(flight.flightId, [...history, historyPoint].slice(-maxHistoryPoints));
+      }
     }
   }
 
