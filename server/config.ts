@@ -2,9 +2,12 @@ import type { FlightDataSource } from '../src/types/flight';
 
 const requestedSource = process.env.FLIGHT_DATA_SOURCE;
 const dataSource: FlightDataSource =
-  requestedSource === 'airplanes-live' || requestedSource === 'demo-ops' || requestedSource === 'stress'
+  requestedSource === 'mock' ||
+  requestedSource === 'airplanes-live' ||
+  requestedSource === 'demo-ops' ||
+  requestedSource === 'stress'
     ? requestedSource
-    : 'mock';
+    : 'airplanes-live';
 
 function readClampedInt(name: string, fallback: number, min: number, max: number): number {
   const value = Number(process.env[name] ?? fallback);

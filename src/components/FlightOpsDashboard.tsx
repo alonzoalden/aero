@@ -91,7 +91,6 @@ export function FlightOpsDashboard() {
           flights={flights}
           selectedFlight={selectedFlight}
           predictionEnabled={serverStatus?.source === 'airplanes-live'}
-          pollIntervalMs={serverStatus?.pollIntervalMs ?? 10_000}
           serverTimeOffsetMs={serverTimeOffsetMs}
           onCameraModeChange={setCameraMode}
           onSelectFlight={setSelectedFlightId}

@@ -90,7 +90,6 @@ button {
   inset: 0;
 }
 
-.map-title,
 .map-hover-card,
 .camera-control {
   position: absolute;
@@ -101,21 +100,8 @@ button {
   box-shadow: 0 16px 40px rgb(0 0 0 / 32%);
 }
 
-.map-title {
-  top: 16px;
-  left: 58px;
-  display: grid;
-  gap: 2px;
-  padding: 10px 12px;
-}
-
-.map-title span {
-  font-weight: 700;
-}
-
-.map-title .prediction-badge {
+.prediction-badge {
   width: fit-content;
-  margin-top: 5px;
   border: 1px solid rgb(56 189 248 / 42%);
   border-radius: 999px;
   background: rgb(14 116 144 / 24%);
@@ -125,7 +111,6 @@ button {
   font-weight: 600;
 }
 
-.map-title small,
 .muted,
 .flight-row small {
   color: var(--muted);
@@ -281,6 +266,17 @@ button {
   padding: 18px;
 }
 
+.panel-footer {
+  display: grid;
+  gap: 8px;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  padding: 14px 2px 2px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -288,13 +284,20 @@ button {
   gap: 12px;
 }
 
-.panel-header p,
-.panel-header h1,
+.panel-header-actions {
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: end;
+  gap: 8px;
+}
+
+.panel-header > div:first-child > p,
+.panel-header > div:first-child > h1,
 .panel-section h2 {
   margin: 0;
 }
 
-.panel-header p {
+.panel-header > div:first-child > p {
   color: var(--accent);
   font-size: 12px;
   font-weight: 700;
@@ -302,8 +305,8 @@ button {
   text-transform: uppercase;
 }
 
-.panel-header h1 {
-  font-size: 28px;
+.panel-header > div:first-child > h1 {
+  font-size: 26px;
 }
 
 .status-pill {
@@ -323,6 +326,67 @@ button {
 .status-error,
 .status-closed {
   color: var(--danger);
+}
+
+.controls-menu {
+  position: relative;
+}
+
+.controls-menu-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 92px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #0a1422;
+  color: var(--text);
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.controls-menu-button:hover,
+.controls-menu-button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.controls-menu-chevron {
+  display: inline-block;
+  transition: transform 160ms ease;
+}
+
+.controls-menu-button[aria-expanded='true'] .controls-menu-chevron {
+  transform: rotate(180deg);
+}
+
+.controls-dropdown {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  width: min(330px, calc(100vw - 36px));
+  border: 1px solid rgb(56 189 248 / 58%);
+  border-radius: 10px;
+  background: #132a46;
+  box-shadow:
+    0 20px 56px rgb(0 0 0 / 64%),
+    0 0 0 1px rgb(56 189 248 / 12%);
+  padding: 14px;
+}
+
+.controls-dropdown-section + .controls-dropdown-section {
+  margin-top: 14px;
+  border-top: 1px solid rgb(148 163 184 / 18%);
+  padding-top: 14px;
+}
+
+.controls-dropdown h2 {
+  margin: 0;
+  font-size: 13px;
+  text-transform: uppercase;
 }
 
 .panel-section {
@@ -453,6 +517,13 @@ button {
   gap: 2px;
 }
 
+.flight-row-metrics {
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: end;
+  gap: 2px;
+}
+
 .flight-row.selected {
   border-color: var(--selected);
 }
@@ -540,8 +611,4 @@ button {
     display: none;
   }
 
-  .map-title {
-    left: 58px;
-    right: 12px;
-  }
 }
