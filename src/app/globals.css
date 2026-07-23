@@ -486,15 +486,41 @@ button {
   border-color: rgb(56 189 248 / 46%);
 }
 
-.list-summary {
-  margin: 0 0 10px;
-  font-size: 13px;
-}
-
-.flight-list,
 .alert-list {
   display: grid;
   gap: 8px;
+}
+
+.flight-list-viewport {
+  height: 384px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
+.flight-list-viewport:focus-visible {
+  border-radius: 8px;
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.flight-list-spacer {
+  position: relative;
+  width: 100%;
+}
+
+.flight-list-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding-bottom: 8px;
+}
+
+.flight-list-empty {
+  margin: 0;
+  font-size: 14px;
 }
 
 .flight-row {
@@ -502,6 +528,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  height: 60px;
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -514,7 +541,15 @@ button {
 
 .flight-row > span:first-child {
   display: grid;
+  min-width: 0;
   gap: 2px;
+}
+
+.flight-row strong,
+.flight-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .flight-row-metrics {

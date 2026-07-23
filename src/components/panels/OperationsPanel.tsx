@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { ActiveFlightList } from '@/components/panels/ActiveFlightList';
 import { AltitudeChart } from '@/components/panels/AltitudeChart';
 import { getDisplayHeadingDeg } from '@/lib/flightHeading';
 import { basemapStyles } from '@/lib/basemaps';
@@ -18,8 +19,9 @@ type OperationsPanelProps = {
   alerts: FlightAlert[];
   basemapId: BasemapId;
   connectionStatus: ConnectionStatus;
-  flights: FlightState[];
+  flightsById: Record<string, FlightState>;
   frontendMetrics: FrontendStreamMetrics;
+  orderedFlightIds: string[];
   serverStatus: FlightServerStatus | null;
   selectedFlight: FlightState | null;
   sourceSwitchError: string | null;
@@ -46,8 +48,9 @@ export function OperationsPanel({
   alerts,
   basemapId,
   connectionStatus,
-  flights,
+  flightsById,
   frontendMetrics,
+  orderedFlightIds,
   serverStatus,
   selectedFlight,
   sourceSwitchError,
@@ -57,8 +60,7 @@ export function OperationsPanel({
   onSelectFlight
 }: OperationsPanelProps) {
   const isStressMode = serverStatus?.source === 'stress';
-  const visibleFlights = isStressMode ? flights.slice(0, 80) : flights;
-  const hiddenFlightCount = Math.max(0, flights.length - visibleFlights.length);
+  const flightCount = orderedFlightIds.length;
   const scaleMetrics = serverStatus?.scaleMetrics;
   const selectedHeadingDeg = selectedFlight ? getDisplayHeadingDeg(selectedFlight) : null;
   const sourceOptions = serverStatus?.availableSources ?? [];
@@ -242,7 +244,7 @@ export function OperationsPanel({
           </div>
         ) : (
           <p className="muted">
-            {flights.length > 0
+            {flightCount > 0
               ? 'The first aircraft is selected automatically; select another aircraft from the map or list.'
               : 'Start the local backend to receive aircraft.'}
           </p>
@@ -253,40 +255,17 @@ export function OperationsPanel({
         <AltitudeChart flight={selectedFlight} />
       </section>
 
-      <section className="panel-section">
-        <h2>Active aircraft</h2>
-        {hiddenFlightCount > 0 ? (
-          <p className="muted list-summary">
-            Showing {visibleFlights.length} of {formatNumber(flights.length)} aircraft to keep the panel readable.
-          </p>
-        ) : null}
-        <div className="flight-list">
-          {visibleFlights.map((flight) => {
-            const route = formatRoute(flight.origin, flight.destination);
-            const altitude = formatMeasurement(flight.altitudeFt, 'ft');
-            const speed = formatMeasurement(flight.groundSpeedKts, 'kts');
-
-            return (
-              <button
-                className={flight.flightId === selectedFlight?.flightId ? 'flight-row selected' : 'flight-row'}
-                key={flight.flightId}
-                onClick={() => onSelectFlight(flight.flightId)}
-                type="button"
-              >
-                <span>
-                  <strong>{flight.callsign}</strong>
-                  {route ? <small>{route}</small> : null}
-                </span>
-                {altitude || speed ? (
-                  <span className="flight-row-metrics">
-                    {altitude ? <span>{altitude}</span> : null}
-                    {speed ? <small>{speed}</small> : null}
-                  </span>
-                ) : null}
-              </button>
-            );
-          })}
+      <section className="panel-section active-flights-section">
+        <div className="section-heading-row">
+          <h2>Active aircraft</h2>
+          <strong>{formatNumber(flightCount)}</strong>
         </div>
+        <ActiveFlightList
+          flightsById={flightsById}
+          orderedFlightIds={orderedFlightIds}
+          selectedFlightId={selectedFlight?.flightId ?? null}
+          onSelectFlight={onSelectFlight}
+        />
       </section>
 
       <section className="panel-section">

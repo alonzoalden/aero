@@ -27,8 +27,16 @@ function isInsideInitialMapViewport(flight: FlightState) {
 }
 
 export function FlightOpsDashboard() {
-  const { alerts, connectionStatus, flightsById, frontendMetrics, serverStatus, serverTimeOffsetMs } = useFlightStream();
-  const flights = useMemo(() => Object.values(flightsById), [flightsById]);
+  const {
+    alerts,
+    connectionStatus,
+    flightsById,
+    frontendMetrics,
+    orderedFlightIds,
+    serverStatus,
+    serverTimeOffsetMs
+  } = useFlightStream();
+  const flights = useMemo(() => orderedFlightIds.map((flightId) => flightsById[flightId]), [flightsById, orderedFlightIds]);
   const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
   const [basemapId, setBasemapId] = useState<BasemapId>(defaultBasemapId);
   const [cameraMode, setCameraMode] = useState<CameraMode>('free');
@@ -99,8 +107,9 @@ export function FlightOpsDashboard() {
       <OperationsPanel
         alerts={alerts}
         connectionStatus={connectionStatus}
-        flights={flights}
+        flightsById={flightsById}
         frontendMetrics={frontendMetrics}
+        orderedFlightIds={orderedFlightIds}
         serverStatus={serverStatus}
         selectedFlight={selectedFlight}
         basemapId={basemapId}

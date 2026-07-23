@@ -2,12 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { parseFlightStreamMessage } from '@/lib/flightStreamMessage';
-import { replaceFlights, upsertFlights } from '@/lib/flightState';
+import { createFlightCollection, replaceFlights, upsertFlights } from '@/lib/flightState';
 import type {
   FlightAlert,
   FlightPositionUpdate,
   FlightServerStatus,
-  FlightState,
   FlightStreamMessage
 } from '@/types/flight';
 
@@ -26,7 +25,7 @@ const reconnectBaseDelayMs = 500;
 const reconnectMaxDelayMs = 5000;
 
 export function useFlightStream() {
-  const [flightsById, setFlightsById] = useState<Record<string, FlightState>>({});
+  const [flightCollection, setFlightCollection] = useState(createFlightCollection);
   const [alerts, setAlerts] = useState<FlightAlert[]>([]);
   const [serverStatus, setServerStatus] = useState<FlightServerStatus | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
@@ -73,7 +72,7 @@ export function useFlightStream() {
         }
       }
 
-      setFlightsById((current) => {
+      setFlightCollection((current) => {
         const updates = Array.from(latestUpdates.values());
         return lastSnapshotIndex >= 0 ? replaceFlights(updates) : upsertFlights(current, updates);
       });
@@ -188,5 +187,13 @@ export function useFlightStream() {
     };
   }, []);
 
-  return { alerts, connectionStatus, flightsById, frontendMetrics, serverStatus, serverTimeOffsetMs };
+  return {
+    alerts,
+    connectionStatus,
+    flightsById: flightCollection.flightsById,
+    frontendMetrics,
+    orderedFlightIds: flightCollection.orderedFlightIds,
+    serverStatus,
+    serverTimeOffsetMs
+  };
 }

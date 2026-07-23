@@ -2,32 +2,67 @@ import type { FlightPositionUpdate, FlightState } from '@/types/flight';
 
 const maxTrackPoints = 40;
 
+export type FlightCollection = {
+  flightsById: Record<string, FlightState>;
+  orderedFlightIds: string[];
+};
+
+export function createFlightCollection(): FlightCollection {
+  return {
+    flightsById: {},
+    orderedFlightIds: []
+  };
+}
+
 export function upsertFlight(
-  flightsById: Record<string, FlightState>,
+  collection: FlightCollection,
   update: FlightPositionUpdate
-): Record<string, FlightState> {
-  return upsertFlights(flightsById, [update]);
+): FlightCollection {
+  return upsertFlights(collection, [update]);
 }
 
 export function upsertFlights(
-  flightsById: Record<string, FlightState>,
+  collection: FlightCollection,
   updates: FlightPositionUpdate[]
-): Record<string, FlightState> {
+): FlightCollection {
   if (updates.length === 0) {
-    return flightsById;
+    return collection;
   }
 
-  const next = { ...flightsById };
+  const nextFlightsById = { ...collection.flightsById };
+  let requiresReorder = false;
 
   for (const update of updates) {
-    next[update.flightId] = mergeFlight(next[update.flightId], update);
+    const previous = nextFlightsById[update.flightId];
+    requiresReorder ||= !previous || getFlightSortKey(previous) !== getFlightSortKey(update);
+    nextFlightsById[update.flightId] = mergeFlight(previous, update);
   }
 
-  return next;
+  return {
+    flightsById: nextFlightsById,
+    orderedFlightIds: requiresReorder
+      ? Object.keys(nextFlightsById).sort((leftId, rightId) =>
+          compareFlights(nextFlightsById[leftId], nextFlightsById[rightId])
+        )
+      : collection.orderedFlightIds
+  };
 }
 
-export function replaceFlights(updates: FlightPositionUpdate[]): Record<string, FlightState> {
-  return upsertFlights({}, updates);
+export function replaceFlights(updates: FlightPositionUpdate[]): FlightCollection {
+  return upsertFlights(createFlightCollection(), updates);
+}
+
+function getFlightSortKey(flight: Pick<FlightPositionUpdate, 'callsign' | 'flightId'>) {
+  return flight.callsign.trim().toUpperCase() || flight.flightId.toUpperCase();
+}
+
+function compareFlights(left: FlightPositionUpdate, right: FlightPositionUpdate) {
+  const callsignComparison = getFlightSortKey(left).localeCompare(getFlightSortKey(right), undefined, {
+    numeric: true,
+    sensitivity: 'base'
+  });
+
+  return callsignComparison || left.flightId.localeCompare(right.flightId);
 }
 
 function mergeFlight(previous: FlightState | undefined, update: FlightPositionUpdate): FlightState {

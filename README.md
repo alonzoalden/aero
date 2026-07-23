@@ -61,6 +61,8 @@ For the polled Airplanes.live source, the server also derives a short-lived, fil
 
 Aircraft are rendered as deck.gl layers instead of React DOM markers. Fast incoming updates are coalesced before they reach the UI so React does not re-render for every raw event.
 
+The Active Aircraft panel uses a virtualized list: every aircraft remains available to the map and normalized client state, but React only mounts the rows near the list viewport. See [Active aircraft list scaling](docs/active-flight-list-scaling.md) for why this app uses virtualization before adding server pagination.
+
 ## Project layout
 
 ```text
