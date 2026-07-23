@@ -24,6 +24,8 @@ export function normalizeAirplanesLiveAircraft(
     return null;
   }
 
+  const lastSeenSeconds = aircraft.seen_pos ?? aircraft.seen ?? null;
+
   return {
     flightId: aircraft.hex.toLowerCase(),
     callsign: aircraft.flight?.trim() || aircraft.hex.toUpperCase(),
@@ -36,9 +38,19 @@ export function normalizeAirplanesLiveAircraft(
     origin: null,
     destination: null,
     source: 'airplanes-live',
-    lastSeenSeconds: aircraft.seen_pos ?? aircraft.seen ?? null,
+    lastSeenSeconds,
+    observedAt: deriveObservedAt(timestamp, lastSeenSeconds),
     timestamp
   };
+}
+
+export function deriveObservedAt(receivedAt: string, lastSeenSeconds: number | null): string {
+  const receivedAtMs = Date.parse(receivedAt);
+  if (!Number.isFinite(receivedAtMs) || lastSeenSeconds === null || !Number.isFinite(lastSeenSeconds)) {
+    return receivedAt;
+  }
+
+  return new Date(receivedAtMs - Math.max(0, lastSeenSeconds) * 1000).toISOString();
 }
 
 function normalizeAltitude(

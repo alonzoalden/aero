@@ -1,11 +1,14 @@
 import type { AircraftProvider } from './aircraftProvider';
+import { createAirplanesLiveMotionTracker } from './airplanesLiveMotion';
 import { normalizeAirplanesLiveAircraft, type AirplanesLiveAircraft } from './normalizeAircraft';
 
 type AirplanesLiveResponse = {
   ac?: AirplanesLiveAircraft[];
 };
 
-export function createAirplanesLiveProvider(url: string): AircraftProvider {
+export function createAirplanesLiveProvider(url: string, pollIntervalMs: number): AircraftProvider {
+  const motionTracker = createAirplanesLiveMotionTracker(pollIntervalMs);
+
   return {
     source: 'airplanes-live',
     async getSnapshot() {
@@ -23,7 +26,7 @@ export function createAirplanesLiveProvider(url: string): AircraftProvider {
         .map((aircraft) => normalizeAirplanesLiveAircraft(aircraft, timestamp))
         .filter((flight): flight is NonNullable<typeof flight> => Boolean(flight));
 
-      return { flights, alerts: [] };
+      return { flights: flights.map(motionTracker.enrich), alerts: [] };
     }
   };
 }

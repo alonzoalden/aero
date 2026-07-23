@@ -14,6 +14,17 @@ test('replaceFlights drops aircraft from the previous source snapshot', () => {
   assert.equal(nextState['live-1']?.source, 'airplanes-live');
 });
 
+test('upsertFlights uses observed time for history and suppresses repeated observations', () => {
+  const first = makeFlight('live-1', 'airplanes-live');
+  first.observedAt = '2026-07-09T11:59:58.000Z';
+  const repeated = { ...first, timestamp: '2026-07-09T12:00:10.000Z' };
+  const firstState = upsertFlights({}, [first]);
+  const repeatedState = upsertFlights(firstState, [repeated]);
+
+  assert.equal(repeatedState['live-1']?.track.length, 1);
+  assert.equal(repeatedState['live-1']?.track[0]?.timestamp, first.observedAt);
+});
+
 function makeFlight(flightId: string, source: FlightPositionUpdate['source']): FlightPositionUpdate {
   return {
     flightId,

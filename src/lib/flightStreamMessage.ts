@@ -65,7 +65,19 @@ function isFlightPositionUpdate(value: unknown): value is FlightPositionUpdate {
     (value.destination === undefined || isNullableString(value.destination)) &&
     isFlightDataSource(value.source) &&
     (value.lastSeenSeconds === undefined || isNullableFiniteNumber(value.lastSeenSeconds)) &&
+    (value.observedAt === undefined || typeof value.observedAt === 'string') &&
+    (value.motion === undefined || isFlightMotion(value.motion)) &&
     typeof value.timestamp === 'string'
+  );
+}
+
+function isFlightMotion(value: unknown) {
+  return (
+    isRecord(value) &&
+    isFiniteNumber(value.northVelocityKts) &&
+    isFiniteNumber(value.eastVelocityKts) &&
+    isNullableFiniteNumber(value.verticalRateFpm) &&
+    typeof value.validUntil === 'string'
   );
 }
 

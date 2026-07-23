@@ -1,9 +1,10 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { AltitudeChart } from '@/components/panels/AltitudeChart';
 import { getDisplayHeadingDeg } from '@/lib/flightHeading';
 import { basemapStyles } from '@/lib/basemaps';
-import { formatNumber, formatRoute, formatTime } from '@/lib/format';
+import { formatMeasurement, formatNumber, formatRoute, formatTime, hasDisplayText } from '@/lib/format';
 import type { ConnectionStatus, FrontendStreamMetrics } from '@/hooks/useFlightStream';
 import type { BasemapId } from '@/lib/basemaps';
 import type {
@@ -27,6 +28,19 @@ type OperationsPanelProps = {
   onSourceChange: (source: RuntimeSwitchableFlightDataSource) => void;
   onSelectFlight: (flightId: string) => void;
 };
+
+function DetailItem({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!hasDisplayText(value)) {
+    return null;
+  }
+
+  return (
+    <>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </>
+  );
+}
 
 export function OperationsPanel({
   alerts,
@@ -54,6 +68,36 @@ export function OperationsPanel({
     (serverStatus?.source === 'airplanes-live'
       ? 'Real public ADS-B-derived data; updates are externally polled and may be slower.'
       : 'Simulated data for smoother demo behavior.');
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const controlsMenuRef = useRef<HTMLDivElement | null>(null);
+  const controlsButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!controlsOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (event.target instanceof Node && !controlsMenuRef.current?.contains(event.target)) {
+        setControlsOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setControlsOpen(false);
+        controlsButtonRef.current?.focus();
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [controlsOpen]);
 
   return (
     <aside className="ops-panel">
@@ -62,94 +106,122 @@ export function OperationsPanel({
           <p>Operations</p>
           <h1>Live Airspace Pulse</h1>
         </div>
-        <span className={`status-pill status-${connectionStatus}`}>{connectionStatus}</span>
+        <div className="panel-header-actions">
+          <span className={`status-pill status-${connectionStatus}`}>{connectionStatus}</span>
+          <div className="controls-menu" ref={controlsMenuRef}>
+            <button
+              aria-controls="operations-controls-dropdown"
+              aria-expanded={controlsOpen}
+              aria-haspopup="dialog"
+              className={controlsOpen ? 'controls-menu-button active' : 'controls-menu-button'}
+              onClick={() => setControlsOpen((current) => !current)}
+              ref={controlsButtonRef}
+              type="button"
+            >
+              Controls
+              <span aria-hidden="true" className="controls-menu-chevron">
+                ▾
+              </span>
+            </button>
+            {controlsOpen ? (
+              <div
+                aria-label="Map and data controls"
+                className="controls-dropdown"
+                id="operations-controls-dropdown"
+                role="dialog"
+              >
+                <section className="controls-dropdown-section">
+                  <div className="section-heading-row">
+                    <h2>Data Source</h2>
+                    {switchingSource || serverStatus?.source ? (
+                      <strong>{switchingSource ? 'switching' : serverStatus?.source}</strong>
+                    ) : null}
+                  </div>
+                  {sourceOptions.length > 0 ? (
+                    <div className="source-segment" aria-label="Data source">
+                      {sourceOptions.map((option) => (
+                        <button
+                          aria-pressed={serverStatus?.source === option.source}
+                          className={serverStatus?.source === option.source ? 'mode-button active' : 'mode-button'}
+                          disabled={Boolean(switchingSource)}
+                          key={option.source}
+                          onClick={() => onSourceChange(option.source)}
+                          type="button"
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="muted source-note">This source is startup-only for this demo slice.</p>
+                  )}
+                  <p className="muted source-note">{sourceNote}</p>
+                  {sourceSwitchError ? <p className="source-error">{sourceSwitchError}</p> : null}
+                </section>
+
+                <section className="controls-dropdown-section">
+                  <div className="section-heading-row">
+                    <h2>Basemap</h2>
+                    <strong>{selectedBasemap.label}</strong>
+                  </div>
+                  <div className="basemap-control" aria-label="Basemap style">
+                    <div className="basemap-buttons">
+                      {basemapStyles.map((style) => (
+                        <button
+                          aria-pressed={basemapId === style.id}
+                          className={basemapId === style.id ? 'basemap-button active' : 'basemap-button'}
+                          key={style.id}
+                          onClick={() => onBasemapChange(style.id)}
+                          title={style.description}
+                          type="button"
+                        >
+                          {style.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="muted source-note">{selectedBasemap.description}</p>
+                </section>
+              </div>
+            ) : null}
+          </div>
+        </div>
       </header>
-
-      <section className="panel-section">
-        <div className="section-heading-row">
-          <h2>Data Source</h2>
-          <strong>{switchingSource ? 'switching' : serverStatus?.source ?? 'unknown'}</strong>
-        </div>
-        {sourceOptions.length > 0 ? (
-          <div className="source-segment" aria-label="Data source">
-            {sourceOptions.map((option) => (
-              <button
-                aria-pressed={serverStatus?.source === option.source}
-                className={serverStatus?.source === option.source ? 'mode-button active' : 'mode-button'}
-                disabled={Boolean(switchingSource)}
-                key={option.source}
-                onClick={() => onSourceChange(option.source)}
-                type="button"
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="muted source-note">This source is startup-only for this demo slice.</p>
-        )}
-        <p className="muted source-note">{sourceNote}</p>
-        {sourceSwitchError ? <p className="source-error">{sourceSwitchError}</p> : null}
-      </section>
-
-      <section className="panel-section">
-        <div className="section-heading-row">
-          <h2>Basemap</h2>
-          <strong>{selectedBasemap.label}</strong>
-        </div>
-        <div className="basemap-control" aria-label="Basemap style">
-          <div className="basemap-buttons">
-            {basemapStyles.map((style) => (
-              <button
-                aria-pressed={basemapId === style.id}
-                className={basemapId === style.id ? 'basemap-button active' : 'basemap-button'}
-                key={style.id}
-                onClick={() => onBasemapChange(style.id)}
-                title={style.description}
-                type="button"
-              >
-                {style.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <p className="muted source-note">{selectedBasemap.description}</p>
-      </section>
 
       {isStressMode ? (
         <section className="panel-section scale-lab">
           <h2>Scale Lab</h2>
           <div className="detail-grid">
-            <span>Source</span>
-            <strong>{serverStatus.source}</strong>
-            <span>Aircraft</span>
-            <strong>{formatNumber(scaleMetrics?.activeAircraftCount ?? serverStatus.aircraftCount)}</strong>
-            <span>Clients</span>
-            <strong>{formatNumber(scaleMetrics?.connectedClients ?? serverStatus.connectedClients)}</strong>
-            <span>Ingest/sec</span>
-            <strong>{formatNumber(scaleMetrics?.ingestUpdatesPerSec)}</strong>
-            <span>WS msg/sec</span>
-            <strong>{formatNumber(scaleMetrics?.webSocketMessagesPerSec)}</strong>
-            <span>Broadcast/sec</span>
-            <strong>{formatNumber(scaleMetrics?.aircraftUpdatesBroadcastPerSec)}</strong>
-            <span>Received/sec</span>
-            <strong>{formatNumber(frontendMetrics.aircraftUpdatesReceivedPerSec)}</strong>
-            <span>Frontend msg/sec</span>
-            <strong>{formatNumber(frontendMetrics.receivedMessagesPerSec)}</strong>
-            <span>Approx FPS</span>
-            <strong>{formatNumber(frontendMetrics.renderFps)}</strong>
-            <span>Coalesced</span>
-            <strong>{formatNumber(scaleMetrics?.coalescedUpdateCount)}</strong>
-            <span>Sequence</span>
-            <strong>{formatNumber(frontendMetrics.lastSequence ?? scaleMetrics?.sequence)}</strong>
-            <span>Server time</span>
-            <strong>
-              {frontendMetrics.lastServerTimestamp
-                ? formatTime(frontendMetrics.lastServerTimestamp)
-                : scaleMetrics?.lastBroadcastTimestamp
-                  ? formatTime(scaleMetrics.lastBroadcastTimestamp)
-                  : 'unknown'}
-            </strong>
+            <DetailItem label="Source" value={serverStatus.source} />
+            <DetailItem
+              label="Aircraft"
+              value={formatNumber(scaleMetrics?.activeAircraftCount ?? serverStatus.aircraftCount)}
+            />
+            <DetailItem
+              label="Clients"
+              value={formatNumber(scaleMetrics?.connectedClients ?? serverStatus.connectedClients)}
+            />
+            <DetailItem label="Ingest/sec" value={formatNumber(scaleMetrics?.ingestUpdatesPerSec)} />
+            <DetailItem label="WS msg/sec" value={formatNumber(scaleMetrics?.webSocketMessagesPerSec)} />
+            <DetailItem label="Broadcast/sec" value={formatNumber(scaleMetrics?.aircraftUpdatesBroadcastPerSec)} />
+            <DetailItem label="Received/sec" value={formatNumber(frontendMetrics.aircraftUpdatesReceivedPerSec)} />
+            <DetailItem label="Frontend msg/sec" value={formatNumber(frontendMetrics.receivedMessagesPerSec)} />
+            <DetailItem label="Approx FPS" value={formatNumber(frontendMetrics.renderFps)} />
+            <DetailItem label="Coalesced" value={formatNumber(scaleMetrics?.coalescedUpdateCount)} />
+            <DetailItem
+              label="Sequence"
+              value={formatNumber(frontendMetrics.lastSequence ?? scaleMetrics?.sequence)}
+            />
+            <DetailItem
+              label="Server time"
+              value={
+                frontendMetrics.lastServerTimestamp
+                  ? formatTime(frontendMetrics.lastServerTimestamp)
+                  : scaleMetrics?.lastBroadcastTimestamp
+                    ? formatTime(scaleMetrics.lastBroadcastTimestamp)
+                    : null
+              }
+            />
           </div>
         </section>
       ) : null}
@@ -158,28 +230,15 @@ export function OperationsPanel({
         <h2>Selected aircraft</h2>
         {selectedFlight ? (
           <div className="detail-grid">
-            <span>Callsign</span>
-            <strong>{selectedFlight.callsign}</strong>
-            <span>Route</span>
-            <strong>{formatRoute(selectedFlight.origin, selectedFlight.destination)}</strong>
-            <span>Altitude</span>
-            <strong>{formatNumber(selectedFlight.altitudeFt)} ft</strong>
-            <span>Speed</span>
-            <strong>{formatNumber(selectedFlight.groundSpeedKts)} kts</strong>
-            <span>Heading</span>
-            <strong>{formatNumber(selectedHeadingDeg)} deg</strong>
-            <span>Vertical rate</span>
-            <strong>{formatNumber(selectedFlight.verticalRateFpm)} fpm</strong>
-            <span>Source</span>
-            <strong>{selectedFlight.source}</strong>
-            <span>Last seen</span>
-            <strong>
-              {selectedFlight.lastSeenSeconds === null || selectedFlight.lastSeenSeconds === undefined
-                ? 'unknown'
-                : `${formatNumber(selectedFlight.lastSeenSeconds)} sec`}
-            </strong>
-            <span>Updated</span>
-            <strong>{formatTime(selectedFlight.timestamp)}</strong>
+            <DetailItem label="Callsign" value={selectedFlight.callsign} />
+            <DetailItem label="Route" value={formatRoute(selectedFlight.origin, selectedFlight.destination)} />
+            <DetailItem label="Altitude" value={formatMeasurement(selectedFlight.altitudeFt, 'ft')} />
+            <DetailItem label="Speed" value={formatMeasurement(selectedFlight.groundSpeedKts, 'kts')} />
+            <DetailItem label="Heading" value={formatMeasurement(selectedHeadingDeg, 'deg')} />
+            <DetailItem label="Vertical rate" value={formatMeasurement(selectedFlight.verticalRateFpm, 'fpm')} />
+            <DetailItem label="Source" value={selectedFlight.source} />
+            <DetailItem label="Last seen" value={formatMeasurement(selectedFlight.lastSeenSeconds, 'sec')} />
+            <DetailItem label="Observed" value={formatTime(selectedFlight.observedAt ?? selectedFlight.timestamp)} />
           </div>
         ) : (
           <p className="muted">
@@ -202,20 +261,31 @@ export function OperationsPanel({
           </p>
         ) : null}
         <div className="flight-list">
-          {visibleFlights.map((flight) => (
-            <button
-              className={flight.flightId === selectedFlight?.flightId ? 'flight-row selected' : 'flight-row'}
-              key={flight.flightId}
-              onClick={() => onSelectFlight(flight.flightId)}
-              type="button"
-            >
-              <span>
-                <strong>{flight.callsign}</strong>
-                <small>{formatRoute(flight.origin, flight.destination)}</small>
-              </span>
-              <span>{formatNumber(flight.altitudeFt)} ft</span>
-            </button>
-          ))}
+          {visibleFlights.map((flight) => {
+            const route = formatRoute(flight.origin, flight.destination);
+            const altitude = formatMeasurement(flight.altitudeFt, 'ft');
+            const speed = formatMeasurement(flight.groundSpeedKts, 'kts');
+
+            return (
+              <button
+                className={flight.flightId === selectedFlight?.flightId ? 'flight-row selected' : 'flight-row'}
+                key={flight.flightId}
+                onClick={() => onSelectFlight(flight.flightId)}
+                type="button"
+              >
+                <span>
+                  <strong>{flight.callsign}</strong>
+                  {route ? <small>{route}</small> : null}
+                </span>
+                {altitude || speed ? (
+                  <span className="flight-row-metrics">
+                    {altitude ? <span>{altitude}</span> : null}
+                    {speed ? <small>{speed}</small> : null}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -230,6 +300,18 @@ export function OperationsPanel({
           ))}
         </div>
       </section>
+
+      <footer className="panel-footer">
+        <small>
+          MapLibre basemap + deck.gl aircraft overlay
+          {isStressMode ? ' + reduced labels for Scale Lab' : ''}
+        </small>
+        {serverStatus?.source === 'airplanes-live' ? (
+          <span className="prediction-badge">
+            Estimated between {Math.max(1, Math.round((serverStatus.pollIntervalMs ?? 10_000) / 1000))}s ADS-B polls
+          </span>
+        ) : null}
+      </footer>
     </aside>
   );
 }

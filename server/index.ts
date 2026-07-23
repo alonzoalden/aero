@@ -26,16 +26,16 @@ const stressProvider = config.dataSource === 'stress' ? createStressProvider(con
 const demoOpsProvider = config.dataSource === 'demo-ops' ? createDemoOpsProvider(config.demoOps.aircraftCount) : null;
 const runtimeSourceOptions: FlightSourceOption[] = [
   {
-    source: 'mock',
-    label: 'Simulated Demo',
-    description: 'Simulated data for smoother demo behavior.',
-    pollIntervalMs: 1000
-  },
-  {
     source: 'airplanes-live',
     label: 'Real ADS-B',
     description: 'Real public ADS-B-derived data; updates are externally polled and may be slower.',
     pollIntervalMs: config.airplanesLivePollMs
+  },
+  {
+    source: 'mock',
+    label: 'Simulated Demo',
+    description: 'Simulated data for smoother demo behavior.',
+    pollIntervalMs: 1000
   }
 ];
 
@@ -353,7 +353,9 @@ function getSourceDescription(source: FlightDataSource) {
 }
 
 function createRuntimeProvider(source: RuntimeSwitchableFlightDataSource): AircraftProvider {
-  return source === 'airplanes-live' ? createAirplanesLiveProvider(config.airplanesLiveUrl) : createMockProvider();
+  return source === 'airplanes-live'
+    ? createAirplanesLiveProvider(config.airplanesLiveUrl, config.airplanesLivePollMs)
+    : createMockProvider();
 }
 
 function isRuntimeSwitchableSource(source: FlightDataSource): source is RuntimeSwitchableFlightDataSource {
