@@ -235,3 +235,91 @@ This project should be runnable without private aviation data, private APIs, or 
 - Do not hide failures.
 - Report files changed, commands run, pass/fail status, and known limitations.
 - Stop after the requested task unless the next step is required to keep the app working.
+
+## Learning handoff and decision trail
+
+This repository uses a “build now, learn later” workflow.
+
+During implementation, stay focused on execution:
+
+- Inspect the repository.
+- Make code changes.
+- Run commands.
+- Debug failures.
+- Test behavior.
+- Verify results.
+- Report risks and blockers.
+
+Do not produce long tutorials during implementation unless the user explicitly requests one or an explanation is necessary to make an immediate decision.
+
+After every meaningful implementation task or architectural decision, append a concise factual entry to:
+
+`docs/build-journal.md`
+
+A meaningful task includes:
+
+- Adding or changing a feature.
+- Fixing a nontrivial bug.
+- Changing architecture or data flow.
+- Adding or changing an integration.
+- Changing authentication, authorization, persistence, APIs, infrastructure, configuration, or deployment behavior.
+- Making an important library or framework choice.
+- Rejecting a realistic alternative.
+- Discovering a constraint that affects future work.
+
+Each journal entry should record:
+
+1. Date.
+2. Goal.
+3. Decision or implementation approach.
+4. Why the approach was chosen.
+5. Alternatives actually considered.
+6. Important files, modules, functions, or symbols changed.
+7. Verification performed.
+8. Risks, tradeoffs, assumptions, or unresolved questions.
+9. Relevant commit, branch, issue, or pull request reference when available.
+
+Keep entries concise. Target approximately 100–250 words unless the decision genuinely requires more context.
+
+Preserve the distinction between facts and inference:
+
+- Record explicit rationale as explicit rationale.
+- Label reconstructed or inferred rationale as “Inference.”
+- Do not invent reasons that were never discussed or established.
+- If no alternative was actually considered, say “No alternative was explicitly evaluated.”
+- If verification was not performed, say so clearly.
+- Never claim tests passed unless they were actually run and passed.
+
+The journal should preserve decisions and evidence, not become a full tutorial.
+
+Do not include:
+
+- Secrets.
+- API keys.
+- Access tokens.
+- Passwords.
+- Private credentials.
+- Sensitive customer data.
+- Large code dumps.
+- Full terminal logs.
+- Speculative rationale presented as fact.
+
+At the end of each meaningful Codex task, keep the conversational completion summary concise and include:
+
+- What changed.
+- What was verified.
+- Any remaining risk or open question.
+- Confirmation that the build journal was updated.
+
+When the user asks for a checkpoint or learning handoff, update the journal with a compact summary of the relevant work and identify:
+
+- Relevant commits or diffs.
+- Primary entry points.
+- Important changed files.
+- Runtime or data flow.
+- Commands and tests that establish current behavior.
+- Decisions whose rationale is documented.
+- Rationale that is only inferred.
+- Unresolved questions.
+
+The purpose of this record is to let another ChatGPT conversation teach the completed work accurately without requiring Codex to generate a long tutorial during the live build.
