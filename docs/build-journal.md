@@ -121,8 +121,6 @@ All flight data and track history remain in browser memory, and the WebSocket pa
 
 Commit `3b2d4c1` (`Virtualize active aircraft list`) on branch `codex/project-live-aircraft-motion`; target branch `origin/master`.
 
----
-
 ### 2026-07-23 — Preserve stable callsign ordering in normalized flight state
 
 **Goal**
@@ -159,3 +157,111 @@ The map array is still reconstructed from all ordered IDs after collection updat
 **References**
 
 Commit `3b2d4c1` (`Virtualize active aircraft list`) on branch `codex/project-live-aircraft-motion`; target branch `origin/master`.
+
+---
+
+### 2026-07-23 — Configure the live-aircraft quantity
+
+**Goal**
+
+Let users bound the Real ADS-B feed at 30, 60, or 100 aircraft, with 30 as the startup default.
+
+**Decision / approach**
+
+Added shared limit metadata and validation to the runtime source contract, capped valid normalized Airplanes.live records in the provider, and made live polls authoritative snapshots. The Controls dropdown exposes the three limits only for Real ADS-B and applies changes immediately through the existing source endpoint. Snapshot reconciliation now removes absent aircraft while retaining track history for aircraft that remain.
+
+**Why**
+
+Server-side limiting keeps the WebSocket payload, normalized UI state, list, and deck.gl map consistent. Authoritative snapshots prevent aircraft from accumulating beyond the selected limit as public-feed membership changes.
+
+**Alternatives considered**
+
+A free numeric input and client-only filtering were explicitly considered. Fixed choices provide bounded validation, while server-side limiting avoids transporting and storing aircraft the user did not request.
+
+**Important changes**
+
+The source API/types, Airplanes.live provider, flight-history and client snapshot reconciliation, Operations controls, tests, README, and deployment notes were updated.
+
+**Verification**
+
+`npm test` passed 45 tests. `npm run typecheck`, `npm run lint`, and `npm run build` passed. A local browser run opened Real ADS-B at 30 aircraft, changed immediately to 60 with 60 active aircraft, hid the quantity control after switching to Simulated Demo, and produced no browser console warnings or errors.
+
+**Risks, tradeoffs, assumptions, and open questions**
+
+Limits are maxima; sparse or partially invalid public data can produce fewer aircraft. Runtime choices are held in server memory and reset to 30 on restart. The provider preserves upstream response order when selecting the bounded set.
+
+**References**
+
+Working tree on branch `master`; no commit or pull request reference is available yet.
+
+---
+
+### 2026-07-24 — Add searchable live-aircraft areas
+
+**Goal**
+
+Allow Real ADS-B users to move beyond Los Angeles by searching and selecting a supported metro area.
+
+**Decision / approach**
+
+Added a shared curated catalog of ten metro areas with airport codes, aliases, coordinates, and fixed query radii. The source API now validates an optional `areaId`, preserves it independently from the aircraft limit, rebuilds the Airplanes.live point URL, clears the prior snapshot, and polls immediately. The Controls dropdown filters areas locally by name, code, slug, or alias. Selecting an area recenters the MapLibre camera and retains the selected quantity.
+
+**Why**
+
+A local catalog keeps the demo keyless and predictable while supporting useful text matching. Shared metadata prevents the UI, API validation, and provider coordinates from diverging.
+
+**Alternatives considered**
+
+External geocoding and an unrestricted coordinate input were considered. They were rejected for this slice because they add network dependencies, result ambiguity, validation, and attribution concerns unrelated to the core aviation-data lesson.
+
+**Important changes**
+
+The shared area catalog, source configuration, provider URL construction, runtime status, dashboard controls, map camera behavior, tests, README, and deployment notes were updated.
+
+**Verification**
+
+`npm test` passed 49 tests. `npm run typecheck`, `npm run lint`, and `npm run build` passed. In a local browser run, searching `LGA` reduced the list to New York; selecting it preserved the 30-aircraft limit, updated server status to `new-york`, replaced the live snapshot, recentered the map over New York, and produced no browser console warnings or errors.
+
+**Risks, tradeoffs, assumptions, and open questions**
+
+Search covers the curated catalog rather than arbitrary places. Each region uses the same fixed radius. Public coverage and returned aircraft counts vary by region.
+
+**References**
+
+Working tree on branch `master`; no commit or pull request reference is available yet.
+
+---
+
+### 2026-07-24 — Replace curated areas with a worldwide airport index
+
+**Goal**
+
+Expand live-area selection from ten curated metros to keyless worldwide airport search without loading the raw OurAirports dataset into the initial client bundle.
+
+**Decision / approach**
+
+Added a reproducible generator that downloads the public OurAirports airport, region, and country CSV files; retains scheduled medium and large airports with valid coordinates; joins readable region and country names; and emits a compact checked-in JSON index. The backend imports that artifact for identifier validation and Airplanes.live coordinates. Controls fetches it only when the Real ADS-B panel opens, validates it, defers text matching, reports total matches, and renders at most 50 results. Search covers city, airport name, IATA/ICAO code, region, country, and keywords. KLAX remains the default.
+
+**Why**
+
+One generated artifact keeps server and client data consistent, works without runtime API keys, and provides broad coverage while avoiding the 12.7 MB raw CSV. Lazy loading keeps the airport catalog out of the initial application bundle.
+
+**Alternatives considered**
+
+MapTiler geocoding, public Nominatim autocomplete, shipping the complete raw CSV, and keeping the ten-area catalog were considered. The generated index avoids paid credentials, prohibited public autocomplete usage, unnecessary fields, and limited coverage.
+
+**Important changes**
+
+The generator/package script, generated airport index, server catalog and source validation, shared search helpers, Controls UI, tests, README, deployment notes, and generated-file metadata were updated.
+
+**Verification**
+
+`npm test` passed 50 tests. `npm run typecheck`, `npm run lint`, and `npm run build` passed. A local browser run loaded 3,299 airports when Controls opened, matched `RJTT` to Tokyo Haneda, selected it while preserving the 30-aircraft limit, recentered the map over Tokyo, and produced no browser console warnings or errors. Server status reported `areaId: "RJTT"` and 30 active aircraft.
+
+**Risks, tradeoffs, assumptions, and open questions**
+
+The checked-in index is a snapshot and must be regenerated to receive upstream changes. Search is airport-centered rather than arbitrary-place geocoding. All Airplanes.live queries retain the existing 100-nautical-mile radius.
+
+**References**
+
+Working tree on branch `master`; no commit or pull request reference is available yet.

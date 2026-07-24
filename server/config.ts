@@ -23,8 +23,7 @@ const demoOpsBroadcastHz = readClampedInt('DEMO_OPS_BROADCAST_HZ', 3, 1, 10);
 export const config = {
   port: Number(process.env.FLIGHT_WS_PORT ?? process.env.PORT ?? 8787),
   dataSource,
-  airplanesLiveUrl:
-    process.env.AIRPLANES_LIVE_URL ?? 'https://api.airplanes.live/v2/point/33.9416/-118.4085/100',
+  airplanesLiveBaseUrl: process.env.AIRPLANES_LIVE_BASE_URL ?? 'https://api.airplanes.live/v2',
   airplanesLivePollMs: Math.max(Number(process.env.AIRPLANES_LIVE_POLL_MS ?? 10000), 5000),
   demoOps: {
     aircraftCount: readClampedInt('DEMO_OPS_AIRCRAFT_COUNT', 30, 5, 80),

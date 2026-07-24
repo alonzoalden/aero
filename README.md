@@ -39,7 +39,9 @@ FLIGHT_DATA_SOURCE=mock npm run dev:all
 FLIGHT_DATA_SOURCE=stress npm run dev:all
 ```
 
-The Operations panel can also switch between public ADS-B data and the standard simulated feed while the app is running.
+The Operations panel can also switch between public ADS-B data and the standard simulated feed while the app is running. When Real ADS-B is active, the Controls menu lazy-loads a worldwide index of scheduled medium and large airports and searches it by city, airport name, IATA/ICAO code, region, country, or keyword. Los Angeles and 30 aircraft are the defaults. Airport and quantity changes apply immediately, and the dashboard may show fewer aircraft when the public response contains fewer valid records.
+
+The airport index is generated from the public-domain [OurAirports data](https://ourairports.com/data/), checked into `public/data/live-airports.json`, and served locally with the app. Runtime search does not require an API key or geocoding service.
 
 ## How it works
 
@@ -86,6 +88,7 @@ npm run typecheck    # Check TypeScript
 npm run lint         # Run ESLint
 npm test             # Run tests
 npm run verify:model # Validate the aircraft model
+npm run generate:airports # Refresh the worldwide OurAirports search index
 ```
 
 ## Notes for Angular developers

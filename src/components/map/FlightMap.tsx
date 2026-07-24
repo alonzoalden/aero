@@ -20,6 +20,7 @@ import {
   type FlightDisplayState
 } from '@/lib/flightProjection';
 import { formatMeasurement, formatRoute, formatTime } from '@/lib/format';
+import type { LiveAircraftArea } from '@/lib/liveAircraftAreas';
 import type { BasemapId } from '@/lib/basemaps';
 import type { CameraFraming, CameraMode, CameraSettings } from '@/types/camera';
 import type { FlightState } from '@/types/flight';
@@ -29,6 +30,7 @@ type FlightMapProps = {
   cameraMode: CameraMode;
   cameraSettings: CameraSettings;
   flights: FlightState[];
+  liveArea: LiveAircraftArea;
   selectedFlight: FlightState | null;
   predictionEnabled: boolean;
   serverTimeOffsetMs: number;
@@ -179,6 +181,7 @@ export function FlightMap({
   cameraMode,
   cameraSettings,
   flights,
+  liveArea,
   selectedFlight,
   predictionEnabled,
   serverTimeOffsetMs,
@@ -213,6 +216,7 @@ export function FlightMap({
   const isDense = flights.length > 250;
   const selectedBasemap = basemapStyles.find((style) => style.id === basemapId) ?? basemapStyles[0];
   const initialBasemapRef = useRef(selectedBasemap);
+  const initialLiveAreaRef = useRef(liveArea);
   const aircraftLabelStyle = useMemo(
     () =>
       basemapId === 'dark'
@@ -460,7 +464,7 @@ export function FlightMap({
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: initialBasemapRef.current.createStyle(),
-      center: [-118.4085, 33.9416],
+      center: [initialLiveAreaRef.current.longitude, initialLiveAreaRef.current.latitude],
       zoom: 7,
       attributionControl: false
     });
@@ -580,6 +584,22 @@ export function FlightMap({
       mapRef.current = null;
     };
   }, [releaseCameraToFree]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    map.easeTo({
+      center: [liveArea.longitude, liveArea.latitude],
+      zoom: 7,
+      bearing: 0,
+      pitch: 0,
+      duration: 600,
+      essential: true
+    });
+  }, [liveArea.id, liveArea.latitude, liveArea.longitude]);
 
   useEffect(() => {
     const map = mapRef.current;

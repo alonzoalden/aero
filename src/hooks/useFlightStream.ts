@@ -74,7 +74,7 @@ export function useFlightStream() {
 
       setFlightCollection((current) => {
         const updates = Array.from(latestUpdates.values());
-        return lastSnapshotIndex >= 0 ? replaceFlights(updates) : upsertFlights(current, updates);
+        return lastSnapshotIndex >= 0 ? replaceFlights(current, updates) : upsertFlights(current, updates);
       });
 
       const latestAlerts = batch.at(-1)?.alerts;

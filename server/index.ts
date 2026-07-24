@@ -1,12 +1,20 @@
 import http from 'node:http';
 import express from 'express';
 import { createAirplanesLiveProvider } from './airplanesLiveProvider';
+import { createAirplanesLiveUrl } from './airplanesLiveUrl';
 import { config } from './config';
 import { createDemoOpsProvider } from './demoOpsProvider';
 import { FlightHistoryStore } from './flightHistoryStore';
 import { createMockProvider } from './mockProvider';
 import { createStressProvider } from './stressProvider';
+import { readRuntimeSourceConfiguration } from './sourceConfiguration';
+import { getLiveAircraftArea } from './liveAirportCatalog';
 import { createWebSocketFlightServer } from './websocketServer';
+import { liveAircraftLimits } from '../src/types/flight';
+import {
+  defaultLiveAircraftAreaId,
+  type LiveAircraftAreaId
+} from '../src/lib/liveAircraftAreas';
 import type { AircraftProvider } from './aircraftProvider';
 import type {
   FlightAlert,
@@ -15,6 +23,7 @@ import type {
   FlightServerStatus,
   FlightSourceOption,
   FlightStreamMessage,
+  LiveAircraftLimit,
   RuntimeSwitchableFlightDataSource,
   ScaleMetrics
 } from '../src/types/flight';
@@ -29,7 +38,8 @@ const runtimeSourceOptions: FlightSourceOption[] = [
     source: 'airplanes-live',
     label: 'Real ADS-B',
     description: 'Real public ADS-B-derived data; updates are externally polled and may be slower.',
-    pollIntervalMs: config.airplanesLivePollMs
+    pollIntervalMs: config.airplanesLivePollMs,
+    aircraftLimits: [...liveAircraftLimits]
   },
   {
     source: 'mock',
@@ -41,8 +51,10 @@ const runtimeSourceOptions: FlightSourceOption[] = [
 
 let alerts: FlightAlert[] = [];
 let activeSource: FlightDataSource = config.dataSource;
+let liveAircraftLimit: LiveAircraftLimit = 30;
+let liveAreaId: LiveAircraftAreaId = defaultLiveAircraftAreaId;
 let runtimeProvider: AircraftProvider | null = isRuntimeSwitchableSource(config.dataSource)
-  ? createRuntimeProvider(config.dataSource)
+  ? createRuntimeProvider(config.dataSource, liveAircraftLimit, liveAreaId)
   : null;
 let runtimePollTimer: ReturnType<typeof setInterval> | null = null;
 let runtimePollGeneration = 0;
@@ -90,6 +102,9 @@ app.get('/api/status', (_request, response) => {
 app.get('/api/sources', (_request, response) => {
   response.json({
     currentSource: activeSource,
+    aircraftLimit: activeSource === 'airplanes-live' ? liveAircraftLimit : undefined,
+    areaId: activeSource === 'airplanes-live' ? liveAreaId : undefined,
+    area: activeSource === 'airplanes-live' ? getLiveAircraftArea(liveAreaId) : undefined,
     availableSources: runtimeSourceOptions,
     isRuntimeSwitchable: isRuntimeSwitchableSource(activeSource)
   });
@@ -104,17 +119,21 @@ app.post('/api/source', async (request, response) => {
     return;
   }
 
-  const requestedSource = readRequestedSource(request.body);
-  if (!requestedSource) {
+  const requested = readRuntimeSourceConfiguration(request.body);
+  if (!requested.configuration) {
     response.status(400).json({
-      error: 'source must be mock or airplanes-live',
+      error: requested.error,
       status: getStatus()
     });
     return;
   }
 
   try {
-    await switchRuntimeSource(requestedSource);
+    await switchRuntimeSource(
+      requested.configuration.source,
+      requested.configuration.aircraftLimit,
+      requested.configuration.areaId
+    );
     response.json(getStatus());
   } catch (error) {
     response.status(502).json({
@@ -175,12 +194,14 @@ async function pollRuntimeProvider(messageType: 'batch' | 'snapshot' = 'batch') 
 
     lastPollTimestamp = new Date().toISOString();
     alerts = result.alerts;
-    if (messageType === 'snapshot') {
-      store.clear();
+    const isAuthoritativeSnapshot = messageType === 'snapshot' || activeSource === 'airplanes-live';
+    if (isAuthoritativeSnapshot) {
+      store.replaceMany(result.flights);
+    } else {
+      store.upsertMany(result.flights);
     }
-    store.upsertMany(result.flights);
     lastBroadcastTimestamp = new Date().toISOString();
-    broadcastFlights(messageType, result.flights, lastBroadcastTimestamp);
+    broadcastFlights(isAuthoritativeSnapshot ? 'snapshot' : messageType, result.flights, lastBroadcastTimestamp);
     return true;
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
@@ -202,11 +223,27 @@ function stopRuntimePolling() {
   }
 }
 
-async function switchRuntimeSource(source: RuntimeSwitchableFlightDataSource) {
+async function switchRuntimeSource(
+  source: RuntimeSwitchableFlightDataSource,
+  aircraftLimit?: LiveAircraftLimit,
+  areaId?: LiveAircraftAreaId
+) {
+  const nextLiveAircraftLimit = source === 'airplanes-live' ? (aircraftLimit ?? liveAircraftLimit) : liveAircraftLimit;
+  const nextLiveAreaId = source === 'airplanes-live' ? (areaId ?? liveAreaId) : liveAreaId;
+  if (
+    source === activeSource &&
+    nextLiveAircraftLimit === liveAircraftLimit &&
+    nextLiveAreaId === liveAreaId
+  ) {
+    return;
+  }
+
   runtimePollGeneration += 1;
   stopRuntimePolling();
   activeSource = source;
-  runtimeProvider = createRuntimeProvider(source);
+  liveAircraftLimit = nextLiveAircraftLimit;
+  liveAreaId = nextLiveAreaId;
+  runtimeProvider = createRuntimeProvider(source, liveAircraftLimit, liveAreaId);
   alerts = [];
   lastPollTimestamp = null;
   store.clear();
@@ -330,6 +367,9 @@ function getStatus(): FlightServerStatus {
     sourceMode: isRuntimeSwitchableSource(activeSource) ? 'runtime-switchable' : 'startup-only',
     sourceDescription: getSourceDescription(activeSource),
     pollIntervalMs: isRuntimeSwitchableSource(activeSource) ? getActivePollIntervalMs() : undefined,
+    aircraftLimit: activeSource === 'airplanes-live' ? liveAircraftLimit : undefined,
+    areaId: activeSource === 'airplanes-live' ? liveAreaId : undefined,
+    area: activeSource === 'airplanes-live' ? getLiveAircraftArea(liveAreaId) : undefined,
     isRuntimeSwitchable: isRuntimeSwitchableSource(activeSource),
     scaleMetrics
   };
@@ -352,23 +392,23 @@ function getSourceDescription(source: FlightDataSource) {
   );
 }
 
-function createRuntimeProvider(source: RuntimeSwitchableFlightDataSource): AircraftProvider {
+function createRuntimeProvider(
+  source: RuntimeSwitchableFlightDataSource,
+  aircraftLimit: LiveAircraftLimit,
+  areaId: LiveAircraftAreaId
+): AircraftProvider {
+  const area = getLiveAircraftArea(areaId);
   return source === 'airplanes-live'
-    ? createAirplanesLiveProvider(config.airplanesLiveUrl, config.airplanesLivePollMs)
+    ? createAirplanesLiveProvider(
+        createAirplanesLiveUrl(config.airplanesLiveBaseUrl, area),
+        config.airplanesLivePollMs,
+        aircraftLimit
+      )
     : createMockProvider();
 }
 
 function isRuntimeSwitchableSource(source: FlightDataSource): source is RuntimeSwitchableFlightDataSource {
   return source === 'mock' || source === 'airplanes-live';
-}
-
-function readRequestedSource(body: unknown): RuntimeSwitchableFlightDataSource | null {
-  if (!body || typeof body !== 'object') {
-    return null;
-  }
-
-  const source = (body as { source?: unknown }).source;
-  return source === 'mock' || source === 'airplanes-live' ? source : null;
 }
 
 function nextSequence() {

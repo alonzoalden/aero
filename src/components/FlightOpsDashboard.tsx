@@ -6,9 +6,15 @@ import { OperationsPanel } from '@/components/panels/OperationsPanel';
 import { useFlightStream } from '@/hooks/useFlightStream';
 import { defaultBasemapId } from '@/lib/basemaps';
 import { flightApiUrl } from '@/lib/flightApi';
+import { defaultLiveAircraftArea, type LiveAircraftAreaId } from '@/lib/liveAircraftAreas';
 import type { BasemapId } from '@/lib/basemaps';
 import type { CameraMode, CameraSettings } from '@/types/camera';
-import type { FlightServerStatus, FlightState, RuntimeSwitchableFlightDataSource } from '@/types/flight';
+import type {
+  FlightServerStatus,
+  FlightState,
+  LiveAircraftLimit,
+  RuntimeSwitchableFlightDataSource
+} from '@/types/flight';
 
 const initialMapViewportBounds = {
   minLat: 32.2,
@@ -51,6 +57,7 @@ export function FlightOpsDashboard() {
   const effectiveSelectedFlightId =
     selectedFlightId && flightsById[selectedFlightId] ? selectedFlightId : defaultSelectedFlight?.flightId ?? null;
   const selectedFlight = effectiveSelectedFlightId ? flightsById[effectiveSelectedFlightId] ?? null : null;
+  const liveArea = serverStatus?.area ?? defaultLiveAircraftArea;
 
   useEffect(() => {
     if (!serverStatus?.source || previousSourceRef.current === serverStatus.source) {
@@ -62,8 +69,19 @@ export function FlightOpsDashboard() {
     setSourceSwitchError(null);
   }, [serverStatus?.source]);
 
-  async function handleSourceChange(source: RuntimeSwitchableFlightDataSource) {
-    if (switchingSource || source === serverStatus?.source) {
+  async function handleSourceChange(
+    source: RuntimeSwitchableFlightDataSource,
+    options: { aircraftLimit?: LiveAircraftLimit; areaId?: LiveAircraftAreaId } = {}
+  ) {
+    const isUnchangedSource = source === serverStatus?.source;
+    const isUnchangedLimit =
+      source !== 'airplanes-live' ||
+      options.aircraftLimit === undefined ||
+      options.aircraftLimit === serverStatus?.aircraftLimit;
+    const isUnchangedArea =
+      source !== 'airplanes-live' || options.areaId === undefined || options.areaId === serverStatus?.areaId;
+
+    if (switchingSource || (isUnchangedSource && isUnchangedLimit && isUnchangedArea)) {
       return;
     }
 
@@ -75,7 +93,7 @@ export function FlightOpsDashboard() {
       const response = await fetch(`${flightApiUrl}/api/source`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ source })
+        body: JSON.stringify({ source, ...options })
       });
       const payload = (await response.json()) as { error?: string; status?: FlightServerStatus };
 
@@ -97,6 +115,7 @@ export function FlightOpsDashboard() {
           cameraSettings={cameraSettings}
           basemapId={basemapId}
           flights={flights}
+          liveArea={liveArea}
           selectedFlight={selectedFlight}
           predictionEnabled={serverStatus?.source === 'airplanes-live'}
           serverTimeOffsetMs={serverTimeOffsetMs}

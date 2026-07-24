@@ -25,6 +25,19 @@ export class FlightHistoryStore {
     }
   }
 
+  replaceMany(flights: FlightPositionUpdate[]) {
+    const nextFlightIds = new Set(flights.map((flight) => flight.flightId));
+
+    for (const flightId of this.latestAircraft.keys()) {
+      if (!nextFlightIds.has(flightId)) {
+        this.latestAircraft.delete(flightId);
+        this.historyByAircraft.delete(flightId);
+      }
+    }
+
+    this.upsertMany(flights);
+  }
+
   getFlights() {
     return Array.from(this.latestAircraft.values());
   }

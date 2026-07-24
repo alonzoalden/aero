@@ -48,8 +48,23 @@ export function upsertFlights(
   };
 }
 
-export function replaceFlights(updates: FlightPositionUpdate[]): FlightCollection {
-  return upsertFlights(createFlightCollection(), updates);
+export function replaceFlights(
+  collection: FlightCollection,
+  updates: FlightPositionUpdate[]
+): FlightCollection {
+  const nextFlightIds = new Set(updates.map((update) => update.flightId));
+  const retainedFlightsById = Object.fromEntries(
+    Object.entries(collection.flightsById).filter(([flightId]) => nextFlightIds.has(flightId))
+  );
+  const retainedOrderedFlightIds = collection.orderedFlightIds.filter((flightId) => nextFlightIds.has(flightId));
+
+  return upsertFlights(
+    {
+      flightsById: retainedFlightsById,
+      orderedFlightIds: retainedOrderedFlightIds
+    },
+    updates
+  );
 }
 
 function getFlightSortKey(flight: Pick<FlightPositionUpdate, 'callsign' | 'flightId'>) {

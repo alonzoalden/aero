@@ -7,7 +7,7 @@ test('replaceFlights drops aircraft from the previous source snapshot', () => {
   const mockFlight = makeFlight('mock-1', 'mock');
   const liveFlight = makeFlight('live-1', 'airplanes-live');
   const previousState = upsertFlights(createFlightCollection(), [mockFlight]);
-  const nextState = replaceFlights([liveFlight]);
+  const nextState = replaceFlights(previousState, [liveFlight]);
 
   assert.equal(Object.keys(previousState.flightsById).length, 1);
   assert.equal(nextState.flightsById['mock-1'], undefined);
@@ -26,18 +26,36 @@ test('upsertFlights uses observed time for history and suppresses repeated obser
   assert.equal(repeatedState.flightsById['live-1']?.track[0]?.timestamp, first.observedAt);
 });
 
+test('replaceFlights preserves retained history while dropping absent aircraft', () => {
+  const first = makeFlight('live-1', 'airplanes-live');
+  const removed = makeFlight('live-2', 'airplanes-live');
+  const initial = replaceFlights(createFlightCollection(), [first, removed]);
+  const nextObservation = {
+    ...first,
+    lat: 34.1,
+    observedAt: '2026-07-09T12:00:10.000Z',
+    timestamp: '2026-07-09T12:00:10.000Z'
+  };
+
+  const next = replaceFlights(initial, [nextObservation]);
+
+  assert.equal(next.flightsById['live-1']?.track.length, 2);
+  assert.equal(next.flightsById['live-2'], undefined);
+  assert.deepEqual(next.orderedFlightIds, ['live-1']);
+});
+
 test('replaceFlights orders aircraft by callsign and then flight ID', () => {
   const bravo = makeFlight('flight-2', 'mock', 'BRAVO2');
   const alphaSecond = makeFlight('flight-3', 'mock', 'ALPHA10');
   const alphaFirst = makeFlight('flight-1', 'mock', 'ALPHA2');
 
-  const state = replaceFlights([bravo, alphaSecond, alphaFirst]);
+  const state = replaceFlights(createFlightCollection(), [bravo, alphaSecond, alphaFirst]);
 
   assert.deepEqual(state.orderedFlightIds, ['flight-1', 'flight-3', 'flight-2']);
 });
 
 test('upsertFlights inserts new aircraft into callsign order', () => {
-  const initial = replaceFlights([
+  const initial = replaceFlights(createFlightCollection(), [
     makeFlight('flight-1', 'mock', 'ALPHA1'),
     makeFlight('flight-3', 'mock', 'CHARLIE1')
   ]);
@@ -48,7 +66,7 @@ test('upsertFlights inserts new aircraft into callsign order', () => {
 });
 
 test('upsertFlights reorders an aircraft when its callsign changes', () => {
-  const initial = replaceFlights([
+  const initial = replaceFlights(createFlightCollection(), [
     makeFlight('flight-1', 'mock', 'ALPHA1'),
     makeFlight('flight-2', 'mock', 'BRAVO1')
   ]);
@@ -59,7 +77,7 @@ test('upsertFlights reorders an aircraft when its callsign changes', () => {
 });
 
 test('position-only updates retain the ordered ID array', () => {
-  const initial = replaceFlights([
+  const initial = replaceFlights(createFlightCollection(), [
     makeFlight('flight-1', 'mock', 'ALPHA1'),
     makeFlight('flight-2', 'mock', 'BRAVO1')
   ]);

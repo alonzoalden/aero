@@ -235,6 +235,28 @@ curl -i -X POST https://aero.alonzoalden.com/api/source \
   -d '{"source":"airplanes-live"}'
 ```
 
+The live source defaults to at most 30 aircraft. To switch to it and request another supported limit, or to change the active limit immediately, include `aircraftLimit` with a value of `30`, `60`, or `100`:
+
+```sh
+curl -i -X POST https://aero.alonzoalden.com/api/source \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"airplanes-live","aircraftLimit":60}'
+```
+
+To change the active live area immediately, include a supported OurAirports identifier as `areaId`. The generated worldwide index is checked into `public/data/live-airports.json`; use its `id` field or the Controls search to resolve a city, airport name, IATA/ICAO code, region, or country. Area and quantity can be changed together:
+
+```sh
+curl -i -X POST https://aero.alonzoalden.com/api/source \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"airplanes-live","areaId":"KJFK","aircraftLimit":60}'
+```
+
+The checked-in index is sufficient for normal deployments. To refresh it from the current public OurAirports CSV files before building:
+
+```sh
+npm run generate:airports
+```
+
 Switch back to simulated demo:
 
 ```sh

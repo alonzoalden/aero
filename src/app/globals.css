@@ -368,6 +368,7 @@ button {
   right: 0;
   display: grid;
   width: min(330px, calc(100vw - 36px));
+  max-height: calc(100vh - 90px);
   border: 1px solid rgb(56 189 248 / 58%);
   border-radius: 10px;
   background: #132a46;
@@ -375,6 +376,7 @@ button {
     0 20px 56px rgb(0 0 0 / 64%),
     0 0 0 1px rgb(56 189 248 / 12%);
   padding: 14px;
+  overflow-y: auto;
 }
 
 .controls-dropdown-section + .controls-dropdown-section {
@@ -430,6 +432,121 @@ button {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 6px;
+}
+
+.aircraft-limit-control {
+  margin-top: 12px;
+  border-top: 1px solid rgb(148 163 184 / 18%);
+  padding-top: 12px;
+}
+
+.aircraft-area-control {
+  margin-top: 12px;
+  border-top: 1px solid rgb(148 163 184 / 18%);
+  padding-top: 12px;
+}
+
+.aircraft-limit-segment {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.area-search-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.area-search-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #0a1422;
+  color: var(--text);
+  padding: 8px 9px;
+}
+
+.area-search-input:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid rgb(56 189 248 / 24%);
+  outline-offset: 1px;
+}
+
+.area-options {
+  display: grid;
+  max-height: 176px;
+  margin-top: 8px;
+  gap: 6px;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+.area-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #0a1422;
+  color: var(--text);
+  padding: 8px 9px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.area-option-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.area-option-copy strong,
+.area-option-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.area-option-copy strong {
+  color: inherit;
+  font-size: 13px;
+}
+
+.area-option small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.area-option-code {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.area-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.area-option.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.area-option.active small {
+  color: var(--accent);
+}
+
+.area-options-empty {
+  margin: 6px 0;
+  font-size: 13px;
+}
+
+.area-results-note {
+  margin: 7px 0 0;
+  font-size: 12px;
 }
 
 .mode-button {

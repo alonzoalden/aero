@@ -1,3 +1,5 @@
+import type { LiveAircraftArea, LiveAircraftAreaId } from '@/lib/liveAircraftAreas';
+
 export type FlightMotion = {
   northVelocityKts: number;
   eastVelocityKts: number;
@@ -45,11 +47,16 @@ export type FlightDataSource = 'mock' | 'airplanes-live' | 'demo-ops' | 'stress'
 
 export type RuntimeSwitchableFlightDataSource = Extract<FlightDataSource, 'mock' | 'airplanes-live'>;
 
+export const liveAircraftLimits = [30, 60, 100] as const;
+
+export type LiveAircraftLimit = (typeof liveAircraftLimits)[number];
+
 export type FlightSourceOption = {
   source: RuntimeSwitchableFlightDataSource;
   label: string;
   description: string;
   pollIntervalMs: number;
+  aircraftLimits?: LiveAircraftLimit[];
 };
 
 export type ScaleMetrics = {
@@ -73,6 +80,9 @@ export type FlightServerStatus = {
   sourceMode?: 'runtime-switchable' | 'startup-only';
   sourceDescription?: string;
   pollIntervalMs?: number;
+  aircraftLimit?: LiveAircraftLimit;
+  areaId?: LiveAircraftAreaId;
+  area?: LiveAircraftArea;
   isRuntimeSwitchable?: boolean;
   scaleMetrics?: ScaleMetrics;
 };
