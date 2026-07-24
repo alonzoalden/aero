@@ -265,3 +265,39 @@ The checked-in index is a snapshot and must be regenerated to receive upstream c
 **References**
 
 Working tree on branch `master`; no commit or pull request reference is available yet.
+
+---
+
+### 2026-07-24 — Filter stationary real ADS-B aircraft at ingestion
+
+**Goal**
+
+Keep aircraft reporting exactly zero ground speed out of the Real ADS-B map, list, server state, and WebSocket payload while preserving other valid telemetry.
+
+**Decision / approach**
+
+The Airplanes.live provider now uses one type-guard filter pass to remove invalid normalized records and records whose `groundSpeedKts` is exactly `0`, before the configured aircraft limit and motion enrichment. Unknown speed (`null`), low positive speed, and zero altitude remain valid. Other providers are unchanged. Existing authoritative live snapshots remove an aircraft from server and browser state if it later reports zero speed.
+
+**Why**
+
+The provider is the source-specific ingestion boundary. Filtering there keeps server counts, history, transport, and client state consistent without turning a valid telemetry value into a parsing error.
+
+**Alternatives considered**
+
+WebSocket-layer filtering, client-side filtering, altitude filtering, and treating zero speed as invalid normalization were explicitly considered. They were rejected because they would create inconsistent state, duplicate policy, or hide valid zero-altitude records.
+
+**Important changes**
+
+Updated `server/airplanesLiveProvider.ts` and its provider tests.
+
+**Verification**
+
+`npm test` passed 52 tests. `npm run typecheck` and `npm run lint` passed. The focused provider test passed 4 tests.
+
+**Risks, tradeoffs, assumptions, and open questions**
+
+Only exact zero is filtered; `null` and small positive speeds remain visible. This policy applies only to Airplanes.live. No runtime browser check was performed because the change is isolated to provider output and covered by automated tests.
+
+**References**
+
+Working tree on branch `master`; no commit or pull request reference is available yet.

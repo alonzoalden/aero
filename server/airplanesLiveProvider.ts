@@ -29,7 +29,10 @@ export function createAirplanesLiveProvider(
       const payload = (await response.json()) as AirplanesLiveResponse;
       const flights = (payload.ac ?? [])
         .map((aircraft) => normalizeAirplanesLiveAircraft(aircraft, timestamp))
-        .filter((flight): flight is NonNullable<typeof flight> => Boolean(flight))
+        .filter(
+          (flight): flight is NonNullable<typeof flight> =>
+            flight !== null && flight.groundSpeedKts !== 0
+        )
         .slice(0, aircraftLimit);
 
       return { flights: flights.map(motionTracker.enrich), alerts: [] };
